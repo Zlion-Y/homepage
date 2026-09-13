@@ -202,8 +202,8 @@
                     </div>
                     <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
                   </div>
-                  <!-- 首次点开队列才建 DOM（410 行渐进上屏），之后常驻只切显示：避免反复重建导致的闪烁 -->
-                  <div v-if="fsQueueBuilt" v-show="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
+                  <!-- 随全屏一起建好（空闲渐进补齐），点列表只切显示：避免首次点开时的大重绘白条 -->
+                  <div v-show="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
                     <div
                       v-for="(t, i) in fsQRows"
                       :key="i"
@@ -422,9 +422,9 @@ function openFs() {
   document.body.style.overflow = "hidden"; // 全屏期间锁背景滚动
   resolveFsCover();
   syncBgShown();
+  fsQList.restart(); // 打开全屏就开始后台渐进铺队列，点列表时已就绪
   nextTick(() => {
     if (fsView.value === "lyrics") fsLrcFollow(true);
-    scrollQueueToActive();
   });
 }
 
@@ -677,11 +677,6 @@ watch(lrcIndex, () => {
 watch(fsView, (v) => {
   if (v === "lyrics") nextTick(() => fsLrcFollow(true));
   else if (v === "queue") {
-    if (!fsQueueBuilt.value) {
-      // 首次点开：建 DOM，首屏先给 32 行并定位当前播放行，其余空闲补齐
-      fsQueueBuilt.value = true;
-      fsQList.restart();
-    }
     nextTick(() => scrollQueueToActive());
   }
 });
@@ -780,7 +775,6 @@ const plList = makeProgressor(playlist, 24, () => scrollPlaylistToActive());
 const plRows = plList.rows;
 const fsQList = makeProgressor(playlist, 32, () => scrollQueueToActive());
 const fsQRows = fsQList.rows;
-const fsQueueBuilt = ref(false); // 队列 DOM 是否已建（建过一次后只切显示）
 
 let isUserScrolling = false;
 let scrollTimeout = null;
