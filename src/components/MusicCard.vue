@@ -138,6 +138,7 @@
           <div class="fs-bg-wrap">
             <img
               v-if="fsCoverSrc"
+              ref="fsBgImg"
               class="fs-bg-img"
               :class="{ show: bgShown }"
               :src="fsCoverSrc"
@@ -293,6 +294,7 @@ const fsView = ref("cover"); // 全屏视图：cover（仅移动端）/ lyrics /
 const fsLrcEl = ref(null);
 const fsSheet = ref(null);
 const fsCoverBox = ref(null);
+const fsBgImg = ref(null);
 const fsCoverSrc = ref("");
 const bgShown = ref(false); // 背景大图首次加载完成后淡入（此后原地换图不闪）
 let fsPrevBodyOverflow = "";
@@ -339,6 +341,7 @@ async function resolveFsCover() {
       if (track.value === t) {
         fsCoverSrc.value = hd;
         resolveDominantColor(t.name, hd);
+        syncBgShown();
       }
     }
   } catch {
@@ -349,6 +352,14 @@ async function resolveFsCover() {
   }
 }
 
+// 缓存命中时 img 的 load 事件可能早于监听器挂载，靠 complete 兜底点亮背景
+function syncBgShown() {
+  nextTick(() => {
+    const img = fsBgImg.value;
+    if (img && img.complete && img.naturalWidth > 0) bgShown.value = true;
+  });
+}
+
 function openFs() {
   fsOpen.value = true;
   fsDesktop.value = window.matchMedia("(min-width: 980px)").matches;
@@ -356,6 +367,7 @@ function openFs() {
   fsPrevBodyOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden"; // 全屏期间锁背景滚动
   resolveFsCover();
+  syncBgShown();
   nextTick(() => {
     if (fsView.value === "lyrics") fsLrcFollow(true);
     scrollQueueToActive();
@@ -1777,8 +1789,9 @@ onUnmounted(() => {
   object-fit: cover;
   /* FluentPlayer 同款背景参数 */
   transform: scale(1.05);
-  filter: blur(56px) brightness(0.72) saturate(1.5);
-  mix-blend-mode: soft-light;
+  /* 不叠 mix-blend-mode：全屏动画层上的混合模式会强制逐帧重算，是这里最大的 GPU 开销 */
+  filter: blur(44px) brightness(0.66) saturate(1.5);
+  will-change: transform; /* 模糊层一次栅格化后只做变换合成，避免逐帧重算模糊 */
   opacity: 0;
   transition: opacity 0.8s ease;
 }

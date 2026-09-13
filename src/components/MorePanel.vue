@@ -76,8 +76,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
   z-index: 40;
   /* 与主页同亮度：只留极浅底色隐去底下主页残影，亮度全交给壁纸层 */
   background: rgba(7, 11, 22, 0.08);
-  backdrop-filter: blur(24px) saturate(1.3);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
 }
 
 .inner {

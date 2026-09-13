@@ -1,12 +1,12 @@
 <template>
   <div class="bg" :style="paletteStyle" aria-hidden="true">
-    <div class="aurora">
+    <div class="aurora" :class="{ idle: custom }">
       <span class="blob b1"></span>
       <span class="blob b2"></span>
       <span class="blob b3"></span>
       <span class="blob b4"></span>
     </div>
-    <img v-if="custom" :src="bgSrc" class="custom" alt="" />
+    <img v-if="custom" :src="bgSrcRef" class="custom" alt="" />
     <div class="grain"></div>
   </div>
 </template>
@@ -18,6 +18,7 @@ import { siteConfig } from "@/config";
 // 背景源：配置的随机壁纸 API 优先，否则探测本地 public/images/background.jpg；
 // 都没有/加载失败则保持极光渐变
 const bgSrc = siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
+const bgSrcRef = ref(bgSrc);
 const custom = ref(false);
 
 // 极光背景随昼夜时段变色（黎明 / 白天 / 黄昏 / 夜晚）
@@ -54,14 +55,30 @@ onMounted(() => {
     // URL 解析失败不影响正常加载
   }
 
-  const img = new Image();
-  img.onload = () => {
-    custom.value = true;
-    window.dispatchEvent(new Event("bg-ready"));
+  // 壁纸源降级链：配置源失败后依次重试备用源，全部失败才回退极光
+  const fallbacks = [
+    "https://t.alcy.cc/ycy",
+    "https://www.dmoe.cc/random.php",
+  ];
+  const candidates = [bgSrc, ...fallbacks.filter((u) => u !== bgSrc)];
+  let tried = 0;
+  const loadBg = () => {
+    if (tried >= candidates.length) {
+      window.dispatchEvent(new Event("bg-ready")); // 全部失败：照常进场用极光
+      return;
+    }
+    const url = candidates[tried++];
+    const img = new Image();
+    img.onload = () => {
+      custom.value = true;
+      bgSrcRef.value = url;
+      window.dispatchEvent(new Event("bg-ready"));
+    };
+    // 失败换下一个源（加随机参数绕开失败缓存）
+    img.onerror = loadBg;
+    img.src = url + (url.includes("?") ? "&" : "?") + "r=" + Math.random().toString(36).slice(2, 6);
   };
-  // 加载失败也通知：页面照常进场，使用极光渐变
-  img.onerror = () => window.dispatchEvent(new Event("bg-ready"));
-  img.src = bgSrc;
+  loadBg();
   applyPalette();
   paletteTimer = setInterval(applyPalette, 60000);
 });
@@ -81,6 +98,11 @@ onUnmounted(() => clearInterval(paletteTimer));
 .aurora {
   position: absolute;
   inset: 0;
+}
+
+/* 壁纸就绪后极光层完全隐藏：110px 模糊 + 漂移动画在图片背后空转纯浪费 GPU */
+.aurora.idle {
+  display: none;
 }
 
 .blob {
