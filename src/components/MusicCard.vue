@@ -134,6 +134,7 @@
     <Teleport to="body">
       <Transition name="fs">
         <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop }">
+          <div class="fs-color-wash" :style="fsWashStyle"></div>
           <div class="fs-bg-wrap">
             <img
               v-if="fsCoverSrc"
@@ -144,6 +145,8 @@
               @load="bgShown = true"
             />
           </div>
+          <div class="fs-grad-1" :style="fsGradStyle"></div>
+          <div class="fs-grad-2" :style="fsGradStyle2"></div>
           <div class="fs-shade"></div>
 <div class="fs-sheet" ref="fsSheet">
               <button class="fs-close" title="退出全屏" @click="closeFs">
@@ -333,11 +336,16 @@ async function resolveFsCover() {
       const hd = pic.replace(/^http:\/\//i, "https://") + "?param=1024y1024";
       fsCoverCache.set(t.name, hd);
       // 歌曲未再变化时才替换，避免慢响应覆盖新歌的封面
-      if (track.value === t) fsCoverSrc.value = hd;
+      if (track.value === t) {
+        fsCoverSrc.value = hd;
+        resolveDominantColor(t.name, hd);
+      }
     }
   } catch {
     // 官方接口失败：回落播放列表自带封面
-    fsCoverSrc.value = hdCover(t.pic);
+    const fallback = hdCover(t.pic);
+    fsCoverSrc.value = fallback;
+    resolveDominantColor(t.name, fallback);
   }
 }
 
@@ -358,6 +366,96 @@ function closeFs() {
   fsOpen.value = false;
   document.body.style.overflow = fsPrevBodyOverflow;
 }
+
+// 封面主色调提取（canvas，网易 CDN 带 CORS 允许取像素）→ 背景色洗 + 径向渐变
+const fsDominant = ref(null); // { h, s, l }
+const fsDominantCache = new Map(); // 歌名 → 主色，避免重复提取
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0, sat = 0;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return { h: h * 360, s: sat, l };
+}
+
+async function resolveDominantColor(name, pic) {
+  if (!pic) {
+    fsDominant.value = null;
+    return;
+  }
+  const cached = fsDominantCache.get(name);
+  if (cached) {
+    fsDominant.value = cached;
+    return;
+  }
+  const color = await new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const done = (c) => resolve(c);
+    img.onload = () => {
+      try {
+        const cv = document.createElement("canvas");
+        cv.width = 24;
+        cv.height = 24;
+        const ctx = cv.getContext("2d");
+        ctx.drawImage(img, 0, 0, 24, 24);
+        const d = ctx.getImageData(0, 0, 24, 24).data;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          // 跳过接近纯白/纯黑的像素，取画面主色更准
+          const mx = Math.max(d[i], d[i + 1], d[i + 2]);
+          const mn = Math.min(d[i], d[i + 1], d[i + 2]);
+          if (mx > 245 || mn < 12) continue;
+          r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+        }
+        if (!n) return done(null);
+        done(rgbToHsl(Math.round(r / n), Math.round(g / n), Math.round(b / n)));
+      } catch {
+        done(null); // 跨域失败则退回模糊封面
+      }
+    };
+    img.onerror = () => done(null);
+    img.src = pic;
+  });
+  if (color) fsDominantCache.set(name, color);
+  fsDominant.value = color;
+}
+
+// 主色可用化：饱和度提上来、亮度压到中间调，任何封面都成一块有存在感的底色
+const fsWashStyle = computed(() => {
+  const c = fsDominant.value;
+  if (!c) return {};
+  const sat = Math.min(0.62, Math.max(0.28, c.s * 1.5));
+  const lum = Math.min(0.42, Math.max(0.16, c.l));
+  return { background: `hsl(${c.h.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}%)` };
+});
+const fsGradStyle = computed(() => {
+  const c = fsDominant.value;
+  if (!c) return {};
+  const sat = Math.min(0.7, Math.max(0.3, c.s * 1.7));
+  const lum = Math.min(0.62, Math.max(0.34, c.l + 0.18));
+  return {
+    background: `radial-gradient(circle at 24% 16%, hsl(${c.h.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}% / 0.28) 0%, transparent 52%)`,
+  };
+});
+const fsGradStyle2 = computed(() => {
+  const c = fsDominant.value;
+  if (!c) return {};
+  const sat = Math.min(0.7, Math.max(0.3, c.s * 1.6));
+  const lum = Math.min(0.5, Math.max(0.24, c.l + 0.08));
+  const h2 = (c.h + 40) % 360;
+  return {
+    background: `radial-gradient(circle at 78% 84%, hsl(${h2.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}% / 0.22) 0%, transparent 62%)`,
+  };
+});
 
 // 封面 3D 倾斜 + 光泽 + 投影（useCoverTilt 同款数学）
 const fsHovering = ref(false);
@@ -1605,10 +1703,23 @@ onUnmounted(() => {
 }
 
 /* 背景：封面大图模糊铺满，加载完成后淡入（切歌时交叉呼吸感） */
+/* 主色调层（FluentPlayer 同款四层背景：底色 → 色洗/模糊封面 → 径向渐变 → 渐晕） */
+.fs-color-wash {
+  position: absolute;
+  inset: 0;
+  filter: saturate(1.1);
+}
+
 .fs-bg-wrap {
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+
+.fs-grad-1,
+.fs-grad-2 {
+  position: absolute;
+  inset: 0;
 }
 
 .fs-bg-img {
@@ -1617,7 +1728,8 @@ onUnmounted(() => {
   object-fit: cover;
   /* FluentPlayer 同款背景参数 */
   transform: scale(1.05);
-  filter: blur(48px) brightness(0.55) saturate(1.4);
+  filter: blur(56px) brightness(0.72) saturate(1.5);
+  mix-blend-mode: soft-light;
   opacity: 0;
   transition: opacity 0.8s ease;
 }
@@ -1632,9 +1744,8 @@ onUnmounted(() => {
   inset: 0;
   /* FluentPlayer 同款：0.35 暗化 + 四周渐晕 */
   background:
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.15), transparent 35%, rgba(0, 0, 0, 0.45)),
-    linear-gradient(to right, rgba(0, 0, 0, 0.2), transparent 25%, transparent 75%, rgba(0, 0, 0, 0.2)),
-    rgba(0, 0, 0, 0.35);
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.1), transparent 35%, rgba(0, 0, 0, 0.4)),
+    linear-gradient(to right, rgba(0, 0, 0, 0.15), transparent 22%, transparent 78%, rgba(0, 0, 0, 0.15));
 }
 
 .fs-sheet {
