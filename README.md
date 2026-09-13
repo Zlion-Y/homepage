@@ -28,45 +28,54 @@
 - 自定义圆点光标 + 移动/点击涟漪、卡片悬停 3D 倾斜 + 光泽动效（手感对齐 FluentPlayer 封面）
 - 移动端自适应、暗色玻璃拟态风格；所有卡片均可在 config.js 中开关与排序
 
-## 部署到 Vercel（GitHub）
+## 部署
 
-### 1. 推送到 GitHub
+### 平台托管部署（推荐）
 
-先在本项目目录初始化并提交（如果还没有的话）：
+参考 [Vercel 官方指南](https://vercel.com/docs/frameworks/frontend/vite) 将本项目部署至 Vercel、Netlify、Cloudflare Pages 等平台。主流平台自动部署，会根据环境自动选择适配器。
 
-```bash
-git init
-git add .
-git commit -m "feat: my home page"
-```
+框架预设：`Vite`
 
-在 [GitHub](https://github.com/new) 新建一个**空仓库**（不要勾选 README / .gitignore），然后：
+根目录：`./`
 
-```bash
-git remote add origin https://github.com/<你的用户名>/<仓库名>.git
-git branch -M main
-git push -u origin main
-```
+输出目录：`dist`
 
-### 2. 导入 Vercel
+构建命令：`npm run build`
 
-1. 打开 [vercel.com](https://vercel.com/)，用 GitHub 账号登录
-2. 点击 **Add New... → Project**
-3. 找到刚才推送的仓库，点击 **Import**
-4. Framework Preset 会自动识别为 **Vite**，什么都不用改，直接点 **Deploy**
-5. 等待约 1 分钟，部署完成后即可通过 `https://<项目名>.vercel.app` 访问
+安装命令：`npm install`
 
-之后每次 `git push` 到 main 分支，Vercel 会自动重新部署。
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Zlion-Y/zlion-home&project-name=zlion-home&repository-name=zlion-home)
 
 > 想绑定自己的域名（如 `home.zlion.top`）：在 Vercel 项目设置 → **Domains** 中添加，按提示到域名 DNS 处加一条 CNAME 记录指向 `cname.vercel-dns.com` 即可。
 
-## 本地开发
+### 本地开发部署
 
-```bash
-npm install   # 安装依赖
-npm run dev   # 开发预览（默认 http://localhost:5173）
-npm run build # 构建产物到 dist/
-```
+1. **克隆仓库：**
+
+   **先 [Fork](https://github.com/Zlion-Y/zlion-home/fork) 到自己仓库再克隆（推荐），记得先点 Star 再 Fork 哦！**
+
+   ```bash
+   git clone https://github.com/you-github-name/zlion-home.git
+   cd zlion-home
+   ```
+
+2. **安装依赖：**
+
+   ```bash
+   npm install
+   ```
+
+3. **自定义配置：**
+
+   - 编辑 `src/config.js` 自定义站点设置（站点信息、卡片开关、面板排列、监控站点等）
+
+4. **启动开发服务器：**
+
+   ```bash
+   npm run dev
+   ```
+
+   页面将在 `http://localhost:5173` 可用，修改配置实时热更新。
 
 ## 自定义
 
