@@ -22,19 +22,24 @@
           />
         </div>
       </div>
-      <div class="info">
-        <div class="info-l1">
-          <h3 class="title" :title="track.name">{{ track.name || "音乐" }}</h3>
-          <button class="btn-lrc" :class="{ on: lrcOpen }" title="歌词" @click="toggleLrc">
-            <Icon name="subtitles" :size="18" />
-          </button>
-        </div>
+        <div class="info">
+          <div class="info-l1">
+            <h3 class="title" :title="track.name">{{ track.name || "音乐" }}</h3>
+            <div class="info-btns">
+              <button class="btn-lrc" :class="{ on: lrcOpen }" title="歌词" @click="toggleLrc">
+                <Icon name="subtitles" :size="18" />
+              </button>
+              <button class="btn-fs" title="全屏播放" @click="openFs">
+                <Icon name="maximize" :size="16" />
+              </button>
+            </div>
+          </div>
         <p class="artist" :title="track.artist">{{ track.artist || "未在播放" }}</p>
         <div class="time-vol">
           <span class="time">{{ fmt(currentTime) }} / {{ fmt(duration) }}</span>
           <div class="vol">
             <button class="btn-mute" title="音量" @click="toggleMute">
-              <Icon :name="isMuted || volume === 0 ? 'music' : 'music'" :size="16" />
+              <Icon :name="isMuted || volume === 0 ? 'volume-x' : 'volume-2'" :size="16" />
             </button>
             <div class="vol-track" @click="setVol">
               <div class="vol-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }"></div>
@@ -127,6 +132,80 @@
       @ended="onEnded"
       @error="onAudioError"
     ></audio>
+
+    <!-- 全屏播放层（Apple Music 风格）：Teleport 到 body，避免卡片 tilt transform 困住 fixed 定位 -->
+    <Teleport to="body">
+      <Transition name="fs">
+        <div v-if="fsOpen" class="fs-player">
+          <div class="fs-bg" :style="fsBg"></div>
+          <div class="fs-shade"></div>
+          <div class="fs-sheet" ref="fsSheet">
+            <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
+              <span></span>
+            </div>
+            <p class="fs-from">正在播放</p>
+
+            <img v-if="!fsLrcOpen && track.pic" class="fs-cover" :src="track.pic" alt="" />
+            <div v-else-if="!fsLrcOpen" class="fs-cover fs-cover-ph">
+              <Icon name="music" :size="64" />
+            </div>
+            <div v-show="fsLrcOpen" class="fs-lrc" ref="fsLrcEl">
+              <div
+                v-for="(line, i) in lyrics"
+                :key="i"
+                class="fs-lrc-line"
+                :class="{ active: i === lrcIndex }"
+                @click="seekTo(line.time)"
+              >
+                {{ line.text }}
+              </div>
+              <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
+            </div>
+
+            <div class="fs-info">
+              <div class="fs-titles">
+                <div class="fs-titles-l">
+                  <h3 class="fs-title">{{ track.name || "音乐" }}</h3>
+                  <p class="fs-artist">{{ track.artist || "未在播放" }}</p>
+                </div>
+                <button class="fs-lrc-btn" :class="{ on: fsLrcOpen }" title="歌词" @click="toggleFsLrc">
+                  <Icon name="subtitles" :size="18" />
+                </button>
+              </div>
+              <div class="fs-progress" @click="seek">
+                <div class="p-bar" :style="{ width: pct + '%' }"></div>
+                <div class="p-thumb" :style="{ left: pct + '%' }"></div>
+              </div>
+              <div class="fs-times">
+                <span>{{ fmt(currentTime) }}</span>
+                <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
+              </div>
+            </div>
+
+            <div class="fs-controls">
+              <button class="fs-btn" title="上一首" @click="prev()">
+                <Icon name="skip-back" :size="32" />
+              </button>
+              <button class="fs-btn fs-play" :title="playing ? '暂停' : '播放'" @click="togglePlay">
+                <Icon :name="playing ? 'pause' : 'play'" :size="44" />
+              </button>
+              <button class="fs-btn" title="下一首" @click="next()">
+                <Icon name="skip-forward" :size="32" />
+              </button>
+            </div>
+
+            <div class="fs-volume">
+              <button class="fs-vol-btn" title="静音" @click="toggleMute">
+                <Icon :name="isMuted || volume === 0 ? 'volume-x' : 'volume-2'" :size="18" />
+              </button>
+              <div class="fs-vol-track" @click="setVol">
+                <div class="fs-vol-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -159,6 +238,88 @@ const coverLoaded = ref(false);
 const lrcOpen = ref(false);
 const plOpen = ref(true); // 播放列表默认展开（手机端有 230px 封顶内滚，不会撑长卡片）
 const errTip = ref(""); // 播放失败提示（整曲所有源失败时短暂显示）
+
+// 全屏播放层
+const fsOpen = ref(false);
+const fsLrcOpen = ref(false);
+const fsLrcEl = ref(null);
+const fsSheet = ref(null);
+let fsPrevBodyOverflow = "";
+const fsBg = computed(() =>
+  track.value.pic ? { backgroundImage: `url("${track.value.pic}")` } : {}
+);
+
+function openFs() {
+  fsOpen.value = true;
+  fsPrevBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden"; // 全屏期间锁背景滚动
+  nextTick(() => {
+    if (fsLrcOpen.value) fsLrcFollow(true);
+  });
+}
+
+function closeFs() {
+  fsOpen.value = false;
+  fsLrcOpen.value = false;
+  document.body.style.overflow = fsPrevBodyOverflow;
+}
+
+function toggleFsLrc() {
+  fsLrcOpen.value = !fsLrcOpen.value;
+  if (fsLrcOpen.value) nextTick(() => fsLrcFollow(true));
+}
+
+// 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
+// 500ms 后仍在原地就立即跳到目标位（真机亮屏时平滑正常生效）
+function smoothScrollTo(el, target) {
+  const before = el.scrollTop;
+  el.scrollTo({ top: target, behavior: "smooth" });
+  setTimeout(() => {
+    if (Math.abs(el.scrollTop - target) > 40 && Math.abs(el.scrollTop - before) < 10) {
+      el.scrollTo({ top: target, behavior: "auto" });
+    }
+  }, 500);
+}
+
+// 全屏歌词跟随当前句（居中）
+function fsLrcFollow(instant) {
+  const el = fsLrcEl.value;
+  if (!el || lrcIndex.value === -1) return;
+  const line = el.children[lrcIndex.value];
+  if (!line) return;
+  const target = line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2;
+  if (instant) {
+    el.scrollTo({ top: target, behavior: "auto" });
+  } else {
+    smoothScrollTo(el, target);
+  }
+}
+
+watch(lrcIndex, () => {
+  if (fsOpen.value && fsLrcOpen.value) fsLrcFollow(false);
+});
+
+// 顶部横杠下拉关闭（跟手拖拽，超过 90px 松手即关）
+let fsDragY0 = 0;
+let fsDragging = false;
+function fsDragStart(e) {
+  fsDragY0 = e.touches[0].clientY;
+  fsDragging = true;
+  fsSheet.value.style.transition = "none";
+}
+function fsDragMove(e) {
+  if (!fsDragging || !fsSheet.value) return;
+  const dy = Math.max(0, e.touches[0].clientY - fsDragY0);
+  fsSheet.value.style.transform = `translateY(${dy}px)`;
+}
+function fsDragEnd(e) {
+  if (!fsDragging || !fsSheet.value) return;
+  fsDragging = false;
+  const dy = Math.max(0, e.changedTouches[0].clientY - fsDragY0);
+  fsSheet.value.style.transition = "";
+  fsSheet.value.style.transform = "";
+  if (dy > 90) closeFs();
+}
 
 const audioEl = ref(null);
 const lrcEl = ref(null);
@@ -301,8 +462,12 @@ function scrollLrcTo(idx, behavior) {
   if (!line || !lrcEl.value) return;
   const target = line.offsetTop - lrcEl.value.clientHeight / 2 + line.offsetHeight / 2;
   // 平滑滚动的事件可持续数百 ms，窗口要盖过它，否则自己的滚动会被当成用户滚动
-  progScrollUntil = performance.now() + (behavior === "smooth" ? 800 : 300);
-  lrcEl.value.scrollTo({ top: target, behavior });
+  progScrollUntil = performance.now() + (behavior === "smooth" ? 900 : 300);
+  if (behavior === "smooth") {
+    smoothScrollTo(lrcEl.value, target);
+  } else {
+    lrcEl.value.scrollTo({ top: target, behavior: "auto" });
+  }
 }
 
 function resetScrollTimeout() {
@@ -651,6 +816,7 @@ onUnmounted(() => {
   audioEl.value?.pause();
   clearTimeout(scrollTimeout);
   if (errTipTimer) clearTimeout(errTipTimer);
+  if (fsOpen.value) document.body.style.overflow = fsPrevBodyOverflow;
 });
 </script>
 
@@ -784,6 +950,28 @@ onUnmounted(() => {
   color: var(--text-dim);
   cursor: pointer;
   transition: color 0.25s ease;
+}
+
+.info-btns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.btn-fs {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.25s ease;
+}
+
+.btn-fs:hover,
+.btn-lrc:hover {
+  color: var(--text);
 }
 
 .btn-lrc:hover,
@@ -978,6 +1166,7 @@ onUnmounted(() => {
   position: relative; /* 让 .lrc-line 的 offsetTop 以容器为基准，居中定位才准确 */
   height: calc(100% - 8px); /* 填满抽屉槽位：可视窗口即居中窗口 */
   overflow-y: auto;
+  overflow-anchor: none; /* 行高亮改变行高，关掉锚定补偿防止跟丢 */
   margin-top: 8px;
   padding: 60px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -1150,5 +1339,286 @@ onUnmounted(() => {
 .tip-text {
   color: var(--text-dim);
   font-size: 0.84rem;
+}
+
+/* ── 全屏播放层（Apple Music 风格） ── */
+.fs-player {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 0%, #1c2333 0%, #0a0e1a 70%);
+}
+
+.fs-bg {
+  position: absolute;
+  inset: -50px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(52px) saturate(1.6) brightness(0.66);
+  transform: scale(1.12);
+}
+
+/* 无封面时背景层隐藏，露出默认深色渐变 */
+.fs-bg:empty {
+  display: none;
+}
+
+.fs-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(10, 14, 26, 0.2), rgba(10, 14, 26, 0.5));
+}
+
+.fs-sheet {
+  position: relative;
+  height: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 10px 26px calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+}
+
+.fs-handle {
+  height: 30px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.fs-handle span {
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.fs-from {
+  text-align: center;
+  font-size: 0.66rem;
+  letter-spacing: 2.5px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.fs-cover {
+  width: min(78%, 330px);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 4px auto 8px;
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+  flex-shrink: 1;
+  min-height: 0;
+}
+
+.fs-cover-ph {
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fs-lrc {
+  position: relative; /* offsetTop 以本容器为基准，当前句居中定位才准 */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* 关闭滚动锚定：行高亮切换会改变行高，锚定补偿会把跟随位置越拖越远 */
+  overflow-anchor: none;
+  margin: 10px 0;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  /* 上下淡出，Apple 歌词质感 */
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+}
+
+/* 上下弹性占位：任何一句（含首尾句）都能滚动到窗口正中 */
+.fs-lrc::before,
+.fs-lrc::after {
+  content: "";
+  flex: 0 0 auto;
+  height: 45%;
+}
+
+.fs-lrc-line {
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  transition: color 0.25s ease, font-size 0.25s ease;
+}
+
+.fs-lrc-line.active {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.22rem;
+}
+
+.fs-info {
+  flex-shrink: 0;
+  margin-top: 16px;
+}
+
+.fs-titles {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fs-title {
+  font-size: 1.32rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fs-artist {
+  font-size: 0.98rem;
+  color: rgba(255, 255, 255, 0.62);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fs-lrc-btn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.25s ease;
+}
+
+.fs-lrc-btn.on {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.fs-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  position: relative;
+  margin-top: 14px;
+}
+
+.fs-progress .p-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.fs-progress .p-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.fs-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.fs-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  margin-top: 14px;
+  flex-shrink: 0;
+}
+
+.fs-btn {
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  transition: opacity 0.2s ease;
+}
+
+.fs-btn:hover {
+  opacity: 0.75;
+}
+
+.fs-play {
+  padding: 10px;
+}
+
+.fs-volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  flex-shrink: 0;
+}
+
+.fs-vol-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+}
+
+.fs-vol-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.fs-vol-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* 进出场：上滑淡入 */
+.fs-enter-active,
+.fs-leave-active {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.fs-enter-from,
+.fs-leave-to {
+  opacity: 0;
+  transform: translateY(42px);
 }
 </style>
