@@ -2112,6 +2112,16 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+/* 歌名/歌手过长时的关键一环：.fs-title/.fs-artist 自己写了 nowrap+ellipsis，
+   但外层这个 flex 子项没写 min-width:0 时，它的最小尺寸等于 nowrap 文本的整个宽度
+   （实测超长歌名会撑到 1469px、冲出容器 1131px，省略号根本不生效、直接糊出屏幕）。
+   给 flex:1 + min-width:0 让它可以被压缩，省略号才会出现。
+   桌面端容器更宽，同一个规则自然就"放宽"了。 */
+.fs-titles-l {
+  flex: 1;
+  min-width: 0;
+}
+
 .fs-title {
   font-size: 1.32rem;
   font-weight: 700;
@@ -2399,6 +2409,10 @@ onUnmounted(() => {
   gap: 2px;
   justify-self: start;
   min-width: 0;
+  /* justify-self: start 让宽度走 fit-content，而 fit-content 的下限仍是 nowrap 文本的
+     min-content 宽度——超长歌名会算出 1057px、溢出它 451px 的网格列并压到播放键上。
+     max-width 兜住，省略号才顶得住。 */
+  max-width: 100%;
 }
 
 .ft-name {
