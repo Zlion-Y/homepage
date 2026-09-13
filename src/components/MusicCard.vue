@@ -15,7 +15,7 @@
             v-show="coverLoaded"
             class="cover-img"
             :class="{ spinning: coverSpinning }"
-            :src="fsCoverSrc || hdCover(track.pic)"
+            :src="cardCoverSrc"
             :style="{ animationPlayState: playing ? 'running' : 'paused' }"
             alt=""
             @load="coverLoaded = true"
@@ -107,7 +107,7 @@
               <img
                 v-if="t.pic && !t.__err"
                 :src="t.pic"
-                :loading="Math.abs(i - index) < 14 ? 'eager' : 'lazy'"
+                :loading="Math.abs(i - index) < 10 ? 'eager' : 'lazy'"
                 decoding="async"
                 alt=""
                 @error="t.__err = true"
@@ -215,7 +215,7 @@
                         v-if="t.pic && !t.__err"
                         class="fs-q-cov"
                         :src="hdCover(t.pic)"
-                        :loading="Math.abs(i - index) < 14 ? 'eager' : 'lazy'"
+                        :loading="Math.abs(i - index) < 10 ? 'eager' : 'lazy'"
                         decoding="async"
                         alt=""
                         @error="t.__err = true"
@@ -534,6 +534,9 @@ function currentWallpaper() {
 }
 // 全屏背景源：有封面用封面，没封面用壁纸兜底
 const fsBgSrc = computed(() => fsCoverSrc.value || fsWallpaper.value);
+
+// 小卡封面（56px 圆形）：300 足够，避免为小图解码 1024 大图
+const cardCoverSrc = computed(() => neteasePic(track.value.pic || fsCoverSrc.value, "300y300"));
 
 // 封面加载失败：退回占位（Logo）+ 壁纸兜底背景
 function onFsCoverError() {
@@ -882,7 +885,7 @@ async function upgradeCovers(tracks) {
       const map = new Map((res.songs || []).map((x) => [String(x.id), (x.album && x.album.picUrl) || ""]));
       part.forEach(({ t, id }) => {
         const pic = map.get(String(id));
-        if (pic) t.pic = neteasePic(pic, "300y300");
+        if (pic) t.pic = neteasePic(pic, "120y120");
       });
     } catch {
       // 该批失败：保持原封面
