@@ -452,7 +452,8 @@ async function resolveDominantColor(name, pic) {
 // 主色可用化：饱和度提上来、亮度压到中间调，任何封面都成一块有存在感的底色
 const fsWashStyle = computed(() => {
   const c = fsDominant.value;
-  if (!c) return {};
+  // 提取失败（跨域/加载失败）时也给一层中性底色，避免背景只剩深底显空
+  if (!c) return { background: "hsl(228 26% 19%)" };
   const sat = Math.min(0.62, Math.max(0.28, c.s * 1.5));
   const lum = Math.min(0.42, Math.max(0.16, c.l));
   return { background: `hsl(${c.h.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}%)` };
