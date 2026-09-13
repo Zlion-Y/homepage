@@ -1490,7 +1490,7 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-/* 封面：显式尺寸恒定盒子——小图源/高清源都不跳变，加载完成淡入 */
+/* 封面：显式尺寸恒定盒子——小图源/高清源都不跳变，原地换图无闪烁 */
 .fs-cover {
   width: min(78%, 330px);
   aspect-ratio: 1 / 1;
@@ -1498,12 +1498,6 @@ onUnmounted(() => {
   max-height: 100%;
   border-radius: 12px;
   box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-
-.fs-cover.show {
-  opacity: 1;
 }
 
 .fs-cover-ph {
