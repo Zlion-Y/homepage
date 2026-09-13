@@ -137,7 +137,17 @@
     <Teleport to="body">
       <Transition name="fs">
         <div v-if="fsOpen" class="fs-player">
-          <div v-if="track.pic" class="fs-bg" :style="fsBg"></div>
+          <div class="fs-bg-wrap">
+            <img
+              v-if="fsCoverSrc"
+              :key="fsCoverSrc"
+              class="fs-bg-img"
+              :class="{ show: bgShown }"
+              :src="fsCoverSrc"
+              alt=""
+              @load="bgShown = true"
+            />
+          </div>
           <div class="fs-shade"></div>
           <div class="fs-sheet" ref="fsSheet">
             <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
@@ -146,7 +156,15 @@
             <p class="fs-from">正在播放</p>
 
             <div class="fs-cover-zone">
-              <img v-if="!fsLrcOpen && fsCoverSrc" class="fs-cover" :src="fsCoverSrc" alt="" />
+              <img
+                v-if="!fsLrcOpen && fsCoverSrc"
+                :key="fsCoverSrc"
+                class="fs-cover"
+                :class="{ show: coverShown }"
+                :src="fsCoverSrc"
+                alt=""
+                @load="coverShown = true"
+              />
               <div v-else-if="!fsLrcOpen" class="fs-cover fs-cover-ph">
                 <Icon name="music" :size="64" />
               </div>
@@ -245,12 +263,9 @@ const fsLrcOpen = ref(false);
 const fsLrcEl = ref(null);
 const fsSheet = ref(null);
 const fsCoverSrc = ref("");
+const bgShown = ref(false); // 背景大图加载完成后淡入
+const coverShown = ref(false); // 封面加载完成后淡入
 let fsPrevBodyOverflow = "";
-// 背景用解析出的封面（官方高清优先后自动跟随）动态模糊
-const fsBg = computed(() => {
-  const u = fsCoverSrc.value || hdCover(track.value.pic);
-  return u ? { backgroundImage: `url("${u}")` } : {};
-});
 
 // 候选封面探针：不同 Meting 源的封面分辨率不同（moeyao 仅 90px，injahow/i-meto 可出 1024），
 // 并行加载选尺寸最大的；都小则退回默认
@@ -369,6 +384,12 @@ function fsLrcFollow(instant) {
 
 watch(lrcIndex, () => {
   if (fsOpen.value && fsLrcOpen.value) fsLrcFollow(false);
+});
+
+// 封面源变化（默认小图 → 官方高清）：重置淡入状态，加载完成淡入
+watch(fsCoverSrc, () => {
+  bgShown.value = false;
+  coverShown.value = false;
 });
 
 // 顶部横杠下拉关闭（跟手拖拽，超过 90px 松手即关）
@@ -1434,13 +1455,25 @@ onUnmounted(() => {
   background: radial-gradient(120% 90% at 50% 0%, #1c2333 0%, #0a0e1a 70%);
 }
 
-.fs-bg {
+/* 背景：封面大图模糊铺满，加载完成后淡入（切歌时交叉呼吸感） */
+.fs-bg-wrap {
   position: absolute;
-  inset: -50px;
-  background-size: cover;
-  background-position: center;
+  inset: 0;
+  overflow: hidden;
+}
+
+.fs-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.15);
   filter: blur(52px) saturate(1.6) brightness(0.66);
-  transform: scale(1.12);
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.fs-bg-img.show {
+  opacity: 1;
 }
 
 
@@ -1495,15 +1528,20 @@ onUnmounted(() => {
   justify-content: center;
 }
 
+/* 封面：显式尺寸恒定盒子——小图源/高清源都不跳变，加载完成淡入 */
 .fs-cover {
-  max-width: min(78%, 330px);
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  aspect-ratio: 1;
+  width: min(78%, 330px);
+  aspect-ratio: 1 / 1;
   object-fit: cover;
+  max-height: 100%;
   border-radius: 12px;
   box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.fs-cover.show {
+  opacity: 1;
 }
 
 .fs-cover-ph {
