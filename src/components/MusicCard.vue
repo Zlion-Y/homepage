@@ -1716,10 +1716,59 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+/* 动态背景：主色光斑缓慢漂移 + 模糊封面呼吸（FluentPlayer 动态背景的轻量实现） */
 .fs-grad-1,
 .fs-grad-2 {
   position: absolute;
-  inset: 0;
+  inset: -12%;
+  will-change: transform;
+}
+
+.fs-grad-1 {
+  animation: fsFlow1 46s ease-in-out infinite alternate;
+}
+
+.fs-grad-2 {
+  animation: fsFlow2 62s ease-in-out infinite alternate;
+}
+
+.fs-bg-img {
+  animation: fsBreath 28s ease-in-out infinite alternate;
+}
+
+@keyframes fsFlow1 {
+  from {
+    transform: translate3d(-4%, -3%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6%, 5%, 0) scale(1.28);
+  }
+}
+
+@keyframes fsFlow2 {
+  from {
+    transform: translate3d(4%, 6%, 0) scale(1.2);
+  }
+  to {
+    transform: translate3d(-6%, -5%, 0) scale(1);
+  }
+}
+
+@keyframes fsBreath {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1.16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fs-grad-1,
+  .fs-grad-2,
+  .fs-bg-img {
+    animation: none;
+  }
 }
 
 .fs-bg-img {
