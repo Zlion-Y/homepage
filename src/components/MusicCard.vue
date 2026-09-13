@@ -157,7 +157,7 @@
               <div class="fs-main">
                 <!-- 封面（移动端在上方常驻；桌面端在左侧） -->
                 <div class="fs-cover-zone">
-                  <div class="fs-cover-box" @mousemove="fsCoverMove" @mouseenter="fsCoverEnter" @mouseleave="fsCoverLeave">
+                  <div class="fs-cover-box" ref="fsCoverBox" @mousemove="fsCoverMove" @mouseenter="fsCoverEnter" @mouseleave="fsCoverLeave">
                     <div class="fs-cover-inner" :style="{ transform: fsCoverTransform }">
                       <img v-if="fsCoverSrc" class="fs-cover" :src="fsCoverSrc" alt="" draggable="false" />
                       <div v-else class="fs-cover fs-cover-ph"><Icon name="music" :size="64" /></div>
@@ -389,7 +389,6 @@ function fsCoverMove(e) {
   fsCoverTransform.value = `perspective(1000px) rotateX(${fsTiltRX.value.toFixed(2)}deg) rotateY(${fsTiltRY.value.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`;
 }
 function fsCoverEnter() {
-  if (!window.matchMedia("(hover: hover)").matches) return;
   fsHovering.value = true;
   const inner = fsCoverBox.value?.querySelector(".fs-cover-inner");
   if (inner) inner.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";
@@ -1512,7 +1511,7 @@ onUnmounted(() => {
   inset: 0;
   z-index: 60;
   overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 0%, #1c2333 0%, #0a0e1a 70%);
+  background: #0a0a0a;
 }
 
 /* 背景：封面大图模糊铺满，加载完成后淡入（切歌时交叉呼吸感） */
@@ -1526,8 +1525,9 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scale(1.15);
-  filter: blur(52px) saturate(1.6) brightness(0.66);
+  /* FluentPlayer 同款背景参数 */
+  transform: scale(1.05);
+  filter: blur(48px) brightness(0.55) saturate(1.4);
   opacity: 0;
   transition: opacity 0.8s ease;
 }
@@ -1540,7 +1540,11 @@ onUnmounted(() => {
 .fs-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(rgba(10, 14, 26, 0.2), rgba(10, 14, 26, 0.5));
+  /* FluentPlayer 同款：0.35 暗化 + 四周渐晕 */
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.15), transparent 35%, rgba(0, 0, 0, 0.45)),
+    linear-gradient(to right, rgba(0, 0, 0, 0.2), transparent 25%, transparent 75%, rgba(0, 0, 0, 0.2)),
+    rgba(0, 0, 0, 0.35);
 }
 
 .fs-sheet {
@@ -1912,12 +1916,13 @@ onUnmounted(() => {
   border: none;
   border-radius: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.38);
   cursor: pointer;
+  transition: color 0.2s ease;
 }
 
 .fs-desktop .fs-close:hover {
-  color: #fff;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .fs-desktop .fs-sheet {
