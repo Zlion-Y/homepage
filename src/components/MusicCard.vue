@@ -361,7 +361,7 @@ async function resolveFsCover() {
     const hd = neteasePic(t.pic, "1024y1024");
     fsCoverCache.set(t.name, hd);
     fsCoverSrc.value = hd;
-    resolveDominantColor(t.name, hd);
+    resolveDominantColor(t.name, neteasePic(hd, "64y64")); // 采样专用小图
     syncBgShown();
     return;
   }
@@ -532,8 +532,12 @@ function currentWallpaper() {
   if (el && el.naturalWidth > 0) return el.src;
   return siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
 }
-// 全屏背景源：有封面用封面，没封面用壁纸兜底
-const fsBgSrc = computed(() => fsCoverSrc.value || fsWallpaper.value);
+// 全屏背景源：封面降规格到 300（背景本身就模糊 44px，1024 纯浪费内存）；无封面用壁纸兜底
+const fsBgSrc = computed(() => {
+  const src = fsCoverSrc.value;
+  if (!src) return fsWallpaper.value;
+  return neteasePic(src, "300y300");
+});
 
 // 小卡封面（56px 圆形）：300 足够，避免为小图解码 1024 大图
 const cardCoverSrc = computed(() => neteasePic(track.value.pic || fsCoverSrc.value, "300y300"));
