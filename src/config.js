@@ -61,7 +61,7 @@ export const siteConfig = {
   // GitHub 用户名（GitHub 卡展示 Followers / Repos 数据；不把 github 加进 panelCards 就不显示）
   githubUser: "Zlion-Y",
   // 网易云音乐歌单 ID（音乐播放卡），从歌单页地址栏 playlist?id=xxx 获取
-  musicPlaylist: "10079062428",
+  musicPlaylist: "12881639195",
   // 站点监控卡（monitor）：检测各站点是否可访问（访客浏览器直连探测，
   // 显示连通状态与响应耗时，60 秒自动刷新）。url 需带 https://
   siteMonitors: [
