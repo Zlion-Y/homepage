@@ -1455,7 +1455,7 @@ onUnmounted(() => {
   height: 100%;
   max-width: 460px;
   margin: 0 auto;
-  padding: 10px 26px calc(24px + env(safe-area-inset-bottom));
+  padding: 10px 26px calc(48px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
 }
@@ -1625,6 +1625,8 @@ onUnmounted(() => {
   background: #fff;
   position: absolute;
   top: 50%;
+  /* 覆盖主卡 .p-thumb 的 margin 负值居中：这里用 translate 居中，叠加会上浮 */
+  margin: 0;
   transform: translate(-50%, -50%);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
