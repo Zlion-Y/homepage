@@ -26,11 +26,8 @@
           <div class="info-l1">
             <h3 class="title" :title="track.name">{{ track.name || "音乐" }}</h3>
             <div class="info-btns">
-              <button class="btn-lrc" :class="{ on: lrcOpen }" title="歌词" @click="toggleLrc">
-                <Icon name="subtitles" :size="18" />
-              </button>
               <button class="btn-fs" title="全屏播放" @click="openFs">
-                <Icon name="maximize" :size="16" />
+                <Icon name="maximize" :size="18" />
               </button>
             </div>
           </div>
@@ -71,8 +68,8 @@
       <button class="btn-skip" title="下一首" @click="next()">
         <Icon name="skip-forward" :size="27" />
       </button>
-      <button class="btn-drawer" :class="{ on: plOpen }" title="播放列表" @click="togglePlaylistDrawer">
-        <Icon name="playlist" :size="19" />
+      <button class="btn-drawer" :class="{ on: lrcOpen }" title="歌词" @click="toggleLrc">
+        <Icon name="subtitles" :size="19" />
       </button>
     </div>
 
@@ -133,10 +130,10 @@
       @error="onAudioError"
     ></audio>
 
-    <!-- 全屏播放层（Apple Music 风格）：Teleport 到 body，避免卡片 tilt transform 困住 fixed 定位 -->
+    <!-- 全屏播放层（移动端竖排 / 桌面端左封面右歌词队列）：Teleport 到 body，避免卡片 tilt transform 困住 fixed 定位 -->
     <Teleport to="body">
       <Transition name="fs">
-        <div v-if="fsOpen" class="fs-player">
+        <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop }">
           <div class="fs-bg-wrap">
             <img
               v-if="fsCoverSrc"
@@ -149,32 +146,58 @@
           </div>
           <div class="fs-shade"></div>
           <div class="fs-sheet" ref="fsSheet">
+            <button class="fs-close" title="退出全屏" @click="closeFs">
+              <Icon name="chevron-down" :size="22" />
+            </button>
             <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
               <span></span>
             </div>
             <p class="fs-from">正在播放</p>
 
-            <div class="fs-cover-zone">
-              <img
-                v-if="!fsLrcOpen && fsCoverSrc"
-                class="fs-cover"
-                :src="fsCoverSrc"
-                alt=""
-              />
-              <div v-else-if="!fsLrcOpen" class="fs-cover fs-cover-ph">
-                <Icon name="music" :size="64" />
-              </div>
-              <div v-show="fsLrcOpen" class="fs-lrc" ref="fsLrcEl">
-                <div
-                  v-for="(line, i) in lyrics"
-                  :key="i"
-                  class="fs-lrc-line"
-                  :class="{ active: i === lrcIndex }"
-                  @click="seekTo(line.time)"
-                >
-                  {{ line.text }}
+            <div class="fs-main">
+              <!-- 封面（移动端歌词/队列视图时隐藏） -->
+              <div class="fs-cover-zone">
+                <img
+                  v-if="fsCoverSrc"
+                  class="fs-cover"
+                  :src="fsCoverSrc"
+                  alt=""
+                />
+                <div v-else class="fs-cover fs-cover-ph">
+                  <Icon name="music" :size="64" />
                 </div>
-                <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
+              </div>
+              <!-- 歌词 / 播放列表（桌面端右侧栏；移动端覆盖封面视图） -->
+              <div class="fs-side">
+                <div v-show="fsView === 'lyrics'" class="fs-lrc" ref="fsLrcEl">
+                  <div
+                    v-for="(line, i) in lyrics"
+                    :key="i"
+                    class="fs-lrc-line"
+                    :class="{ active: i === lrcIndex }"
+                    @click="seekTo(line.time)"
+                  >
+                    {{ line.text }}
+                  </div>
+                  <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
+                </div>
+                <div v-show="fsView === 'queue'" class="fs-queue">
+                  <div
+                    v-for="(t, i) in playlist"
+                    :key="i"
+                    class="fs-q-row"
+                    :class="{ active: i === index }"
+                    @click="playIndex(i)"
+                  >
+                    <img v-if="t.pic" class="fs-q-cov" :src="hdCover(t.pic)" alt="" />
+                    <div v-else class="fs-q-cov fs-q-ph"><Icon name="music" :size="16" /></div>
+                    <div class="fs-q-meta">
+                      <div class="fs-q-name">{{ t.name }}</div>
+                      <div class="fs-q-artist">{{ t.artist }}</div>
+                    </div>
+                  </div>
+                  <div v-if="!playlist.length" class="lrc-empty">歌单为空</div>
+                </div>
               </div>
             </div>
 
@@ -184,36 +207,51 @@
                   <h3 class="fs-title">{{ track.name || "音乐" }}</h3>
                   <p class="fs-artist">{{ track.artist || "未在播放" }}</p>
                 </div>
-                <button class="fs-lrc-btn" :class="{ on: fsLrcOpen }" title="歌词" @click="toggleFsLrc">
-                  <Icon name="subtitles" :size="18" />
+                <div class="fs-view-btns">
+                  <button class="fs-view-btn" :class="{ on: fsView === 'lyrics' }" title="歌词" @click="fsToggleView('lyrics')">
+                    <Icon name="subtitles" :size="18" />
+                  </button>
+                  <button class="fs-view-btn" :class="{ on: fsView === 'queue' }" title="播放列表" @click="fsToggleView('queue')">
+                    <Icon name="playlist" :size="18" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="fs-progress" @click="seek">
+              <div class="p-bar" :style="{ width: pct + '%' }"></div>
+              <div class="p-thumb" :style="{ left: pct + '%' }"></div>
+            </div>
+            <div class="fs-times">
+              <span>{{ fmt(currentTime) }}</span>
+              <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
+            </div>
+
+            <div class="fs-bottom">
+              <div class="fs-trackinfo">
+                <span class="ft-name">{{ track.name || "音乐" }}</span>
+                <span class="ft-artist">{{ track.artist || "未在播放" }}</span>
+              </div>
+              <div class="fs-controls">
+                <button class="fs-btn fs-shuffle" :class="{ on: playMode !== 0 }" title="播放模式" @click="cycleMode">
+                  <Icon :name="modeIcon" :size="24" />
+                </button>
+                <button class="fs-btn" title="上一首" @click="prev()">
+                  <Icon name="skip-back" :size="30" />
+                </button>
+                <button class="fs-btn fs-play" :title="playing ? '暂停' : '播放'" @click="togglePlay">
+                  <Icon :name="playing ? 'pause' : 'play'" :size="42" />
+                </button>
+                <button class="fs-btn" title="下一首" @click="next()">
+                  <Icon name="skip-forward" :size="30" />
+                </button>
+                <button class="fs-btn fs-queuebtn" :class="{ on: fsView === 'queue' }" title="播放列表" @click="fsToggleView('queue')">
+                  <Icon name="playlist" :size="24" />
                 </button>
               </div>
-              <div class="fs-progress" @click="seek">
-                <div class="p-bar" :style="{ width: pct + '%' }"></div>
-                <div class="p-thumb" :style="{ left: pct + '%' }"></div>
-              </div>
-              <div class="fs-times">
+              <div class="fs-time">
                 <span>{{ fmt(currentTime) }}</span>
                 <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
-              </div>
-            </div>
-
-            <div class="fs-controls">
-              <button class="fs-btn" title="上一首" @click="prev()">
-                <Icon name="skip-back" :size="32" />
-              </button>
-              <button class="fs-btn fs-play" :title="playing ? '暂停' : '播放'" @click="togglePlay">
-                <Icon :name="playing ? 'pause' : 'play'" :size="44" />
-              </button>
-              <button class="fs-btn" title="下一首" @click="next()">
-                <Icon name="skip-forward" :size="32" />
-              </button>
-            </div>
-
-            <div class="fs-volume">
-              <div class="fs-vol-track" @click="setVol">
-                <div class="fs-vol-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }"></div>
-                <div class="fs-vol-thumb" :style="{ left: (isMuted ? 0 : volume * 100) + '%' }"></div>
               </div>
             </div>
           </div>
@@ -255,7 +293,8 @@ const errTip = ref(""); // 播放失败提示（整曲所有源失败时短暂�
 
 // 全屏播放层
 const fsOpen = ref(false);
-const fsLrcOpen = ref(false);
+const fsDesktop = ref(false); // 桌面布局：左封面右歌词队列；移动端：竖排
+const fsView = ref("cover"); // 全屏视图：cover（仅移动端）/ lyrics / queue
 const fsLrcEl = ref(null);
 const fsSheet = ref(null);
 const fsCoverSrc = ref("");
@@ -303,23 +342,28 @@ async function resolveFsCover() {
 
 function openFs() {
   fsOpen.value = true;
+  fsDesktop.value = window.matchMedia("(min-width: 980px)").matches;
+  fsView.value = fsDesktop.value ? "lyrics" : "cover";
   fsPrevBodyOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden"; // 全屏期间锁背景滚动
   resolveFsCover();
   nextTick(() => {
-    if (fsLrcOpen.value) fsLrcFollow(true);
+    if (fsView.value === "lyrics") fsLrcFollow(true);
   });
 }
 
 function closeFs() {
   fsOpen.value = false;
-  fsLrcOpen.value = false;
   document.body.style.overflow = fsPrevBodyOverflow;
 }
 
-function toggleFsLrc() {
-  fsLrcOpen.value = !fsLrcOpen.value;
-  if (fsLrcOpen.value) nextTick(() => fsLrcFollow(true));
+// 全屏视图切换：桌面端歌词⇄队列；移动端 cover⇄歌词⇄队列
+function fsToggleView(v) {
+  if (fsDesktop.value) {
+    fsView.value = fsView.value === v ? "lyrics" : v;
+  } else {
+    fsView.value = fsView.value === v ? "cover" : v;
+  }
 }
 
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
@@ -349,7 +393,10 @@ function fsLrcFollow(instant) {
 }
 
 watch(lrcIndex, () => {
-  if (fsOpen.value && fsLrcOpen.value) fsLrcFollow(false);
+  if (fsOpen.value && fsView.value === "lyrics") fsLrcFollow(false);
+});
+watch(fsView, (v) => {
+  if (v === "lyrics") nextTick(() => fsLrcFollow(true));
 });
 
 
@@ -832,12 +879,9 @@ function toggleLrc() {
         scrollLrcTo(lrcIndex.value, "auto");
       }
     }, 360);
+  } else {
+    plOpen.value = true; // 歌词收起恢复常驻播放列表，小卡永不为空
   }
-}
-
-function togglePlaylistDrawer() {
-  plOpen.value = !plOpen.value;
-  if (plOpen.value) lrcOpen.value = false;
 }
 
 function onUserLrcScroll() {
@@ -1662,25 +1706,6 @@ onUnmounted(() => {
   padding: 10px;
 }
 
-.fs-volume {
-  margin-top: 18px;
-  flex-shrink: 0;
-}
-
-/* 音量条：与进度条同款样式（带拇指），宽度与进度条对齐 */
-.fs-vol-track {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.22);
-  cursor: pointer;
-  position: relative;
-}
-
-.fs-vol-fill {
-  height: 100%;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.85);
-}
 
 .fs-vol-thumb {
   width: 12px;
@@ -1691,6 +1716,263 @@ onUnmounted(() => {
   top: 50%;
   transform: translate(-50%, -50%);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* ── 桌面端全屏布局：左封面 右歌词/队列 ── */
+.fs-close {
+  display: none;
+}
+
+.fs-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fs-cover-zone {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.fs-side {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fs-desktop .fs-handle,
+.fs-desktop .fs-from,
+.fs-desktop .fs-info,
+.fs-desktop .fs-times {
+  display: none;
+}
+
+.fs-close {
+  display: none;
+}
+
+.fs-desktop .fs-close {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.fs-desktop .fs-sheet {
+  max-width: none;
+  padding: 24px 48px calc(40px + env(safe-area-inset-bottom));
+}
+
+.fs-desktop .fs-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  gap: 56px;
+  align-items: stretch; /* 右栏高度约束在主区内，歌词不外溢压到进度条 */
+}
+
+.fs-desktop .fs-cover-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fs-desktop .fs-cover {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.fs-desktop .fs-side {
+  display: flex;
+}
+
+/* 桌面歌词：左对齐、当前句大字号（Apple 歌词版式） */
+.fs-desktop .fs-lrc {
+  align-items: flex-start;
+  text-align: left;
+  padding: 40px 12px;
+}
+
+.fs-desktop .fs-lrc-line {
+  font-size: 1.25rem;
+}
+
+.fs-desktop .fs-lrc-line.active {
+  font-size: 1.7rem;
+}
+
+/* 桌面底部条：进度条在上，信息/控制/时间在下 */
+.fs-desktop .fs-progress {
+  margin-top: 0;
+}
+
+.fs-desktop .fs-progress .p-bar {
+  background: var(--accent1);
+}
+
+.fs-desktop .fs-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  margin-top: 10px;
+}
+
+.fs-trackinfo {
+  display: none;
+}
+
+.fs-desktop .fs-trackinfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-self: start;
+  min-width: 0;
+}
+
+.ft-name {
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ft-artist {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fs-time {
+  display: none;
+}
+
+.fs-desktop .fs-time {
+  display: flex;
+  gap: 12px;
+  justify-self: end;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fs-desktop .fs-controls {
+  justify-self: center;
+  gap: 26px;
+}
+
+.fs-btn.on {
+  color: var(--accent1);
+}
+
+/* 队列列表（桌面右侧 / 移动端封面视图） */
+.fs-queue {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 8px;
+}
+
+.fs-q-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.fs-q-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fs-q-row.active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.fs-q-cov {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.fs-q-ph {
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fs-q-meta {
+  min-width: 0;
+}
+
+.fs-q-name {
+  color: #fff;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fs-q-row.active .fs-q-name {
+  color: var(--accent1);
+}
+
+.fs-q-artist {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.76rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 移动端全屏视图切换按钮 */
+.fs-view-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.fs-view-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.25s ease;
+}
+
+.fs-view-btn.on {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
 }
 
 /* 进出场：上滑淡入 */
