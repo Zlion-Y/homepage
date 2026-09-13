@@ -1,6 +1,10 @@
 # zlion-home
 
+**🔗 在线访问：[www.zlion.top](https://www.zlion.top)**
+
 参考 [imsyy/home](https://github.com/imsyy/home) 风格编写的个人主页，使用 **Vue 3 + Vite** 构建，开箱即用，零配置部署到 Vercel。
+
+![zlion-home 主页效果：壁纸背景 + 毛玻璃卡片](./docs/preview.webp)
 
 已收录的站点：
 
@@ -157,6 +161,8 @@
 
 ```
 zlion-home/
+├── docs/
+│   └── preview.webp         # README 用的效果图（不进构建产物）
 ├── public/
 │   ├── favicon.svg          # 网站图标
 │   └── images/              # 放 background.jpg 可自定义背景
