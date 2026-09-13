@@ -49,6 +49,7 @@ export function initCursor() {
     mx = e.clientX;
     my = e.clientY;
     dot.style.transform = `translate(${mx}px, ${my}px)`;
+    ringKick();
 
     // 移动超过一定距离泛起一圈小涟漪
     if (Math.hypot(mx - lastX, my - lastY) > 42) {
@@ -72,10 +73,29 @@ export function initCursor() {
     dot.classList.toggle("hovered", !!hit);
   });
 
-  (function loop() {
+  // 外圈缓动跟随：只在还没追上鼠标时跑 rAF，追上就停帧，鼠标再动时由 mousemove 唤醒。
+  // 原来的常驻 rAF 每帧写一次 transform——鼠标静止时也一直在占主线程与合成器配额，
+  // 页面本该空闲的帧没有余量留给真正要做的事。
+  let ringRunning = false;
+  function ringLoop() {
     rx += (mx - rx) * 0.18;
     ry += (my - ry) * 0.18;
+    const settled = Math.abs(mx - rx) < 0.1 && Math.abs(my - ry) < 0.1;
+    if (settled) {
+      rx = mx;
+      ry = my;
+    }
     ring.style.transform = `translate(${rx}px, ${ry}px)`;
-    requestAnimationFrame(loop);
-  })();
+    if (settled) {
+      ringRunning = false;
+      return;
+    }
+    requestAnimationFrame(ringLoop);
+  }
+  function ringKick() {
+    if (ringRunning) return;
+    ringRunning = true;
+    requestAnimationFrame(ringLoop);
+  }
+  ringKick();
 }

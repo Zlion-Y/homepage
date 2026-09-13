@@ -3,7 +3,7 @@
     <Loading v-if="loading" />
   </Transition>
   <Background />
-  <div class="page" :class="{ ready: !loading }">
+  <div class="page" :class="{ ready: !loading, 'panel-open': showMore }">
     <main class="container">
       <section class="col">
         <div
@@ -112,6 +112,15 @@ onMounted(() => {
   /* 进场动画的 26px 下移位移会把页脚推出视口、闪出一条滚动条（动画结束消失引起页面右移）；
      clip 就地裁掉这点溢出，滚动条不再出现 */
   overflow: clip;
+}
+
+/* 二级面板打开时不再绘制主页卡片：面板背景按要求不做模糊，主页卡片若继续绘制，
+   就会和面板自己的卡片叠在一起（两层卡片互相透出）。隐藏后背景只剩壁纸本身——
+   清晰、不模糊，面板卡片依旧各自毛玻璃，与一级界面观感一致。
+   用 visibility 而非 display：不触发布局，关闭面板时主页原样恢复；
+   关闭瞬间主页立刻回画（面板正在淡出，不会露出空白底）。 */
+.page.panel-open {
+  visibility: hidden;
 }
 
 .container {

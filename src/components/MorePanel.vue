@@ -74,10 +74,20 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
   position: fixed;
   inset: 0;
   z-index: 40;
-  /* 与主页同亮度：只留极浅底色隐去底下主页残影，亮度全交给壁纸层 */
+  /* 背景不模糊，与一级界面一致：只模糊卡片、背景保持清晰。
+     这里原本有一层覆盖整屏的 backdrop-filter: blur(20px) saturate(1.3)，
+     它要对整屏背景逐帧重采样，正是打开面板后 GPU 从约 49% 涨到约 73% 的主因；
+     卡片的毛玻璃由各卡自己的 .glass 提供，观感与一级界面统一。
+     只留一层极浅底色，压一下底下主页的亮度。 */
   background: rgba(7, 11, 22, 0.08);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+}
+
+/* 面板卡片是动态挂载的，出现时就已经可见——不预先提升合成层的话，会先画出一层
+   半透明白底、下一帧模糊才补上（"白色透底 → 毛玻璃"的闪一下）。
+   主页卡片不需要这个提示：它们首绘时被载入层盖着，模糊在揭开前就已就绪。
+   只给面板这 6 张卡加，且随面板卸载一起消失，不做常驻开销。 */
+.more :deep(.glass) {
+  will-change: backdrop-filter;
 }
 
 .inner {

@@ -41,25 +41,54 @@ let timer = null;
 
 const descEl = ref(null);
 
-// 视口阻尼跟随文字头部：打字时平滑跟进、停顿期停在句尾（光标闪烁）、回退时平滑收回
+// 视口阻尼跟随文字头部：打字时平滑跟进、停顿期停在句尾（光标闪烁）、回退时平滑收回。
+// 只在文字/视口变化后跑 rAF，且目标宽度只在需要时重算——scrollWidth 是强制同步布局，
+// 原来每帧读一次，等于页面常驻约 60 次/秒的全量布局（鼠标静止也在跑）。
 let rafId = null;
+let running = false;
+let followDirty = true;
+let targetW = 0;
 
 function scrollFollow() {
   const el = descEl.value;
-  if (el) {
-    const target = Math.max(0, el.scrollWidth - el.clientWidth);
-    const diff = target - el.scrollLeft;
-    if (Math.abs(diff) > 0.5) el.scrollLeft += diff * 0.12;
-    else el.scrollLeft = target;
+  if (!el) {
+    running = false;
+    rafId = null;
+    return;
   }
+  if (followDirty) {
+    targetW = Math.max(0, el.scrollWidth - el.clientWidth);
+    followDirty = false;
+  }
+  const diff = targetW - el.scrollLeft;
+  if (Math.abs(diff) > 0.5) {
+    el.scrollLeft += diff * 0.12;
+    rafId = requestAnimationFrame(scrollFollow);
+    return;
+  }
+  // 已归位：停帧，等下一次文字变化再唤醒
+  el.scrollLeft = targetW;
+  running = false;
+  rafId = null;
+}
+
+function kickFollow() {
+  followDirty = true;
+  if (running) return;
+  running = true;
   rafId = requestAnimationFrame(scrollFollow);
 }
+
+const onResize = () => {
+  if (typing) kickFollow();
+};
 
 function tick() {
   const line = lines[lineIdx];
   if (!deleting) {
     charIdx++;
     display.value = line.slice(0, charIdx);
+    kickFollow();
     if (charIdx >= line.length) {
       deleting = true;
       timer = setTimeout(tick, 3000);
@@ -69,6 +98,7 @@ function tick() {
   } else {
     charIdx--;
     display.value = line.slice(0, charIdx);
+    kickFollow();
     if (charIdx <= 0) {
       deleting = false;
       lineIdx = (lineIdx + 1) % lines.length;
@@ -81,14 +111,16 @@ function tick() {
 
 onMounted(() => {
   if (typing) {
-    rafId = requestAnimationFrame(scrollFollow);
+    kickFollow();
     timer = setTimeout(tick, 3000);
+    window.addEventListener("resize", onResize);
   }
 });
 
 onUnmounted(() => {
   clearTimeout(timer);
   if (rafId) cancelAnimationFrame(rafId);
+  window.removeEventListener("resize", onResize);
 });
 </script>
 

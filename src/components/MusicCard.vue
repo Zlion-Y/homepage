@@ -96,14 +96,14 @@
       <div class="drawer-clip">
         <div class="playlist-container" ref="plEl">
           <div
-            v-for="(t, i) in playlist"
+            v-for="(t, i) in plRows"
             :key="i"
             class="pl-item"
             :class="{ active: i === index }"
             @click="playIndex(i)"
           >
             <div class="pi-cover">
-              <img v-if="t.pic" :src="t.pic" loading="lazy" alt="" />
+              <img v-if="t.pic" :src="t.pic" loading="lazy" decoding="async" alt="" />
               <Icon v-else name="music" :size="13" class="pi-ph" />
               <div class="pi-overlay" v-show="i === index">
                 <div class="eq-bars" v-show="playing">
@@ -184,15 +184,16 @@
                     </div>
                     <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
                   </div>
-                  <div v-show="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
+                  <!-- v-if 而非 v-show：410 行队列不该在全屏打开（默认看歌词）时就建出来 -->
+                  <div v-if="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
                     <div
-                      v-for="(t, i) in playlist"
+                      v-for="(t, i) in fsQRows"
                       :key="i"
                       class="fs-q-row"
                       :class="{ active: i === index }"
                       @click="fsPickQueue(i)"
                     >
-                      <img v-if="t.pic" class="fs-q-cov" :src="hdCover(t.pic)" alt="" />
+                      <img v-if="t.pic" class="fs-q-cov" :src="hdCover(t.pic)" decoding="async" alt="" />
                       <div v-else class="fs-q-cov fs-q-ph"><Icon name="music" :size="16" /></div>
                       <div class="fs-q-meta">
                         <div class="fs-q-name">{{ t.name }}</div>
@@ -544,12 +545,19 @@ function scrollListToActive(container, activeEl) {
   container.scrollTop = activeEl.offsetTop - container.clientHeight / 2 + activeEl.offsetHeight / 2;
 }
 function scrollPlaylistToActive() {
-  const row = plEl.value?.children?.[index.value];
-  scrollListToActive(plEl.value, row);
+  // 当前行可能还没被渐进渲染出来，先补到它，再等 DOM 落地后定位
+  plList.ensure(index.value + 1);
+  nextTick(() => {
+    const row = plEl.value?.children?.[index.value];
+    scrollListToActive(plEl.value, row);
+  });
 }
 function scrollQueueToActive() {
-  const row = fsQueueEl.value?.children?.[index.value];
-  scrollListToActive(fsQueueEl.value, row);
+  fsQList.ensure(index.value + 1);
+  nextTick(() => {
+    const row = fsQueueEl.value?.children?.[index.value];
+    scrollListToActive(fsQueueEl.value, row);
+  });
 }
 watch(index, () => {
   nextTick(() => {
@@ -557,6 +565,16 @@ watch(index, () => {
     if (fsOpen.value && fsView.value === "queue") scrollQueueToActive();
   });
 });
+
+// 歌单到位后开始渐进上屏（空歌单时 limit 归零，拿到数据再从头补）
+watch(
+  () => playlist.value.length,
+  () => {
+    plList.restart();
+    if (fsOpen.value && fsView.value === "queue") fsQList.restart();
+  },
+  { immediate: true }
+);
 
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
 // 500ms 后仍在原地就立即跳到目标位（真机亮屏时平滑正常生效）
@@ -589,6 +607,11 @@ watch(lrcIndex, () => {
 });
 watch(fsView, (v) => {
   if (v === "lyrics") nextTick(() => fsLrcFollow(true));
+  else if (v === "queue") {
+    // 队列刚挂载：首屏先给 32 行并定位当前播放行，其余空闲补齐
+    fsQList.restart();
+    nextTick(() => scrollQueueToActive());
+  }
 });
 
 
@@ -618,6 +641,73 @@ function fsDragEnd(e) {
 const audioEl = ref(null);
 const lrcEl = ref(null);
 const plEl = ref(null);
+
+// 歌单渐进上屏：410 行一次性渲染要建约 5300 个节点，是一次约 100ms 的主线程长任务
+// （点开二级面板当场掉帧的真凶）。改成分帧追加——首屏只建 chunk 行，其余在空闲时间
+// 补齐，单帧代价只剩新增的那几行；配合行上的 content-visibility，离屏行不参与布局。
+function makeProgressor(totalRef, chunk, onDone) {
+  const limit = ref(chunk);
+  const rows = computed(() => totalRef.value.slice(0, limit.value));
+  let handle = 0;
+  let idle = false;
+  // 补齐完成前不允许“先渲染到某一行”——随机起始曲的序号可能接近 400，
+  // 一旦按需插队渲染就退化成一次性上屏（实测仍是约 80ms 长任务）。
+  // 补齐完成后再定位（onDone），此时 limit 已到底，插队是空操作。
+  let fillDone = false;
+  const stop = () => {
+    if (!handle) return;
+    if (idle && window.cancelIdleCallback) window.cancelIdleCallback(handle);
+    else clearTimeout(handle);
+    handle = 0;
+  };
+  const schedule = (fn) => {
+    if (window.requestIdleCallback) {
+      idle = true;
+      // timeout 设为 60ms：只在真空闲时插入，但保证 1s 内补完，用户开始滚动前就已就绪
+      return window.requestIdleCallback(fn, { timeout: 60 });
+    }
+    idle = false;
+    return setTimeout(fn, 16);
+  };
+  const step = () => {
+    if (limit.value >= totalRef.value.length) {
+      handle = 0;
+      fillDone = true;
+      if (onDone) onDone();
+      return;
+    }
+    limit.value = Math.min(totalRef.value.length, limit.value + chunk);
+    handle = schedule(step);
+  };
+  return {
+    rows,
+    // 回到首屏 chunk 再补齐（歌单到位 / 切到队列视图时调用）
+    restart() {
+      stop();
+      fillDone = false;
+      limit.value = Math.min(chunk, totalRef.value.length);
+      if (limit.value < totalRef.value.length) {
+        handle = schedule(step);
+      } else {
+        handle = 0;
+        fillDone = true;
+        if (onDone) onDone();
+      }
+    },
+    // 要定位到某一行时先把它渲染出来（否则 children[i] 还不存在）
+    ensure(n) {
+      if (!fillDone) return;
+      if (limit.value < n) limit.value = Math.min(n, totalRef.value.length);
+    },
+    stop,
+  };
+}
+// 补完最后一行后再定位一次当前播放行：行是渐进追加的，早先那次定位时
+// 后面的行还没进 DOM，容器高度/偏移与最终不一致
+const plList = makeProgressor(playlist, 24, () => scrollPlaylistToActive());
+const plRows = plList.rows;
+const fsQList = makeProgressor(playlist, 32, () => scrollQueueToActive());
+const fsQRows = fsQList.rows;
 
 let isUserScrolling = false;
 let scrollTimeout = null;
@@ -1177,7 +1267,7 @@ onMounted(async () => {
     failedLoad();
   }
   loading.value = false;
-  nextTick(() => scrollPlaylistToActive());
+  // 定位不在这一步做：此时行还没补齐，偏移不准，交给补齐完成后的 onDone
 });
 
 function failedLoad() {
@@ -1186,6 +1276,8 @@ function failedLoad() {
 
 onUnmounted(() => {
   audioEl.value?.pause();
+  plList.stop();
+  fsQList.stop();
   clearTimeout(scrollTimeout);
   if (errTipTimer) clearTimeout(errTipTimer);
   if (fsOpen.value) document.body.style.overflow = fsPrevBodyOverflow;
@@ -1592,6 +1684,11 @@ onUnmounted(() => {
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.25s ease;
+  /* 离屏行跳过布局/绘制：410 行歌单滚动时不再逐行参与布局。
+     注意 contain-intrinsic-size 量的是内容盒（不含 padding），所以填封面高度 32px
+     而不是行高 48px——多算 16px 会让每行占位偏大、offsetTop 累积漂移 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 32px;
 }
 
 .pl-item:hover {
@@ -2338,6 +2435,9 @@ onUnmounted(() => {
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.2s ease;
+  /* 同 .pl-item：全屏队列也是 410 行，离屏行不进布局；42px 是封面内容盒高度 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 42px;
 }
 
 .fs-q-row:hover {

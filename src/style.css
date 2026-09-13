@@ -73,8 +73,9 @@ img {
   border-radius: var(--radius);
   backdrop-filter: blur(14px) saturate(1.4);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  /* 预先提升合成层，避免首次绘制时模糊效果慢一拍 */
-  will-change: backdrop-filter;
+  /* 不要写 will-change: backdrop-filter：那不是"提前提升一次"，而是让这些模糊层
+     长期驻留合成树，且任何时候背景变化都要重算——页面上十几张卡会一直吃掉 GPU。
+     首次绘制慢一帧的代价远小于常驻开销。 */
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
   transition:
     background 0.3s ease,
