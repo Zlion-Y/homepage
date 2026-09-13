@@ -207,11 +207,14 @@ onUnmounted(() => clearInterval(paletteTimer));
   }
 }
 
+/* 颗粒层：原来带 mix-blend-mode: overlay。整屏混合模式是常驻开销——Chromium 要为它
+   保住一张全屏混合层并逐帧重算，实测独占约 8 个 GPU 点（一级 49% → 41%，几乎等于
+   把整个背景层都关掉；壁纸本身和它的 filter 都是静态的一次性成本，不花钱）。
+   改成普通低透明度叠加：在 4% 这个量级肉眼几乎分辨不出，但没有混合模式就没有那笔开销。 */
 .grain {
   position: absolute;
   inset: 0;
-  opacity: 0.05;
-  mix-blend-mode: overlay;
+  opacity: 0.04;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
   background-size: 180px;
 }
