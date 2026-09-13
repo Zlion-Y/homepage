@@ -155,7 +155,7 @@
               <p class="fs-from">正在播放</p>
 
               <div class="fs-main">
-                <!-- 封面（移动端歌词/队列视图时隐藏） -->
+                <!-- 封面（移动端在上方常驻；桌面端在左侧） -->
                 <div class="fs-cover-zone">
                   <div class="fs-cover-box" @mousemove="fsCoverMove" @mouseenter="fsCoverEnter" @mouseleave="fsCoverLeave">
                     <div class="fs-cover-inner" :style="{ transform: fsCoverTransform }">
@@ -186,7 +186,7 @@
                       :key="i"
                       class="fs-q-row"
                       :class="{ active: i === index }"
-                      @click="playIndex(i)"
+                      @click="fsPickQueue(i)"
                     >
                       <img v-if="t.pic" class="fs-q-cov" :src="hdCover(t.pic)" alt="" />
                       <div v-else class="fs-q-cov fs-q-ph"><Icon name="music" :size="16" /></div>
@@ -205,14 +205,6 @@
                   <div class="fs-titles-l">
                     <h3 class="fs-title">{{ track.name || "音乐" }}</h3>
                     <p class="fs-artist">{{ track.artist || "未在播放" }}</p>
-                  </div>
-                  <div class="fs-view-btns">
-                    <button class="fs-view-btn" :class="{ on: fsView === 'lyrics' }" title="歌词" @click="fsToggleView('lyrics')">
-                      <Icon name="subtitles" :size="18" />
-                    </button>
-                    <button class="fs-view-btn" :class="{ on: fsView === 'queue' }" title="播放列表" @click="fsToggleView('queue')">
-                      <Icon name="playlist" :size="18" />
-                    </button>
                   </div>
                 </div>
               </div>
@@ -352,7 +344,7 @@ async function resolveFsCover() {
 function openFs() {
   fsOpen.value = true;
   fsDesktop.value = window.matchMedia("(min-width: 980px)").matches;
-  fsView.value = fsDesktop.value ? "lyrics" : "cover";
+  fsView.value = "lyrics"; // 两端都默认歌词视图（移动端歌词常驻封面下方）
   fsPrevBodyOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden"; // 全屏期间锁背景滚动
   resolveFsCover();
@@ -415,13 +407,15 @@ function fsCoverLeave() {
   }
 }
 
-// 全屏视图切换：桌面端歌词⇄队列；移动端 cover⇄歌词⇄队列
+// 全屏视图切换：歌词 ⇄ 播放列表（两端一致）
 function fsToggleView(v) {
-  if (fsDesktop.value) {
-    fsView.value = fsView.value === v ? "lyrics" : v;
-  } else {
-    fsView.value = fsView.value === v ? "cover" : v;
-  }
+  fsView.value = fsView.value === v ? "lyrics" : v;
+}
+
+// 全屏播放列表选歌后自动收回列表（回到歌词）
+function fsPickQueue(i) {
+  playIndex(i);
+  fsView.value = "lyrics";
 }
 
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
@@ -566,9 +560,11 @@ async function fetchPlaylistAll() {
 }
 
 // ── 歌单预载：页面一打开就开始拉，进二级面板时多半已就绪 ──
+// 缓存 key 绑定歌单 ID：配置改了歌单立即失效，不用清缓存/无痕
+const playlistCacheKey = `music_playlist_v2_${siteConfig.musicPlaylist || "default"}`;
 const playlistReady = (async () => {
   try {
-    const cached = JSON.parse(localStorage.getItem("music_playlist_v2") || "null");
+    const cached = JSON.parse(localStorage.getItem(playlistCacheKey) || "null");
     if (cached && Date.now() - cached.ts < 6 * 60 * 60 * 1000 && cached.playlist.length) {
       return cached.playlist;
     }
@@ -578,7 +574,7 @@ const playlistReady = (async () => {
   try {
     const tracks = await fetchPlaylistAll();
     try {
-      localStorage.setItem("music_playlist_v2", JSON.stringify({ ts: Date.now(), playlist: tracks }));
+      localStorage.setItem(playlistCacheKey, JSON.stringify({ ts: Date.now(), playlist: tracks }));
     } catch {
       // 存储失败不影响展示
     }
@@ -958,7 +954,7 @@ onMounted(async () => {
       playlist.value = await fetchPlaylistAll();
       try {
         localStorage.setItem(
-          "music_playlist_v2",
+          playlistCacheKey,
           JSON.stringify({ ts: Date.now(), playlist: playlist.value })
         );
       } catch {
@@ -966,8 +962,8 @@ onMounted(async () => {
       }
     }
     if (playlist.value.length) {
-      // 预载第一首（不自动播），点播放立即出声
-      loadAndPlay(0, false);
+      // 随机预载一首（不自动播），避免每次打开都是同一首
+      loadAndPlay(Math.floor(Math.random() * playlist.value.length), false);
     } else {
       failedLoad();
     }
@@ -1593,13 +1589,62 @@ onUnmounted(() => {
 }
 
 /* 封面：显式尺寸恒定盒子——小图源/高清源都不跳变，原地换图无闪烁 */
-.fs-cover {
-  width: min(78%, 330px);
+/* 封面盒子：尺寸在盒子（居中），img 填满；投影在下方随倾斜位移 */
+.fs-cover-box {
+  position: relative;
+  width: min(62%, 250px);
   aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  transition: width 300ms ease;
+}
+
+.fs-cover-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  isolation: isolate;
+  transform-style: preserve-3d;
+}
+
+.fs-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  max-height: 100%;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+}
+
+.fs-shine {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  border-radius: inherit;
+  transition: opacity 240ms ease-out;
+}
+
+.fs-cover-shadow {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 10%;
+  width: 80%;
+  height: 14%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0.2) 45%,
+    transparent 80%
+  );
+  filter: blur(12px);
+  pointer-events: none;
+  z-index: 5;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .fs-cover-ph {
@@ -1831,12 +1876,11 @@ onUnmounted(() => {
 }
 
 .fs-cover-zone {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 6px 0 10px;
 }
 
 .fs-side {
@@ -1858,18 +1902,22 @@ onUnmounted(() => {
 }
 
 .fs-desktop .fs-close {
-  display: grid;
-  place-items: center;
+  display: block;
   position: absolute;
-  top: 20px;
-  right: 28px;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  top: 18px;
+  left: 24px;
+  width: auto;
+  height: auto;
+  padding: 6px;
   border: none;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+  background: transparent;
   color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
+}
+
+.fs-desktop .fs-close:hover {
+  color: #fff;
 }
 
 .fs-desktop .fs-sheet {
@@ -1890,12 +1938,11 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-.fs-desktop .fs-cover {
+.fs-desktop .fs-cover-box {
   /* FluentPlayer 同款封面尺寸公式 */
   --cover-size: min(clamp(180px, 38vw, 520px), clamp(220px, 45vh, 580px));
   width: var(--cover-size);
-  height: var(--cover-size);
-  border-radius: 16px;
+  aspect-ratio: 1 / 1;
 }
 
 .fs-desktop .fs-side {
@@ -1980,7 +2027,9 @@ onUnmounted(() => {
 
 .fs-desktop .fs-controls {
   justify-self: center;
+  align-self: center;
   gap: 26px;
+  margin-top: 0; /* 移动端的 14px 边距会把控制栏压低造成与两侧信息不对齐 */
 }
 
 .fs-btn.on,
