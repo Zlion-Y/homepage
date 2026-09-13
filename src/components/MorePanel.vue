@@ -8,8 +8,14 @@
         </button>
         <h2>探索更多</h2>
       </header>
-      <div class="grid" :style="{ '--rows': gridRows }">
-        <component :is="c.comp" v-for="c in cards" :key="c.key" class="cell" />
+      <div class="grid" :style="{ '--rows': gridRows, '--n': cards.length }">
+        <component
+          :is="c.comp"
+          v-for="(c, i) in cards"
+          :key="c.key"
+          class="cell"
+          :style="{ '--i': i }"
+        />
       </div>
     </div>
   </div>
@@ -102,6 +108,56 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
    只给面板这 6 张卡加，且随面板卸载一起消失，不做常驻开销。 */
 .more :deep(.glass) {
   will-change: backdrop-filter;
+}
+
+/* ── 进场：面板本体不动，只让卡片依次浮起 ──
+   面板自带一张壁纸层，面板只要一动，背景就跟着整块平移（非常假，这就是上一版
+   整屏滑动难看的原因）。而面板背景与一级是同一张壁纸，所以"瞬间出现"在视觉上
+   本来就是无缝的——真正需要"加载感"的是卡片内容，用逐张错峰浮起表现。
+   只做 transform，不碰 opacity：opacity 动画会让 backdrop-filter 停摆，
+   卡片会先透底、模糊后到（就是之前的"毛玻璃慢半拍"）。--i 由模板按顺序注入。 */
+.more-enter-active :deep(.grid > .cell) {
+  animation: cell-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* 返回键与标题：同样只做位移（返回键本身也有 backdrop-filter，不能淡入） */
+.more-enter-active .top {
+  animation: top-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes cell-in {
+  from {
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes top-in {
+  from {
+    transform: translateY(-8px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* 退场：反向依次沉下去（--n 是卡片总数，由模板注入）。
+   both 填充：延迟期间保持原位不跳，动画结束停在位移态（紧接着就卸载了）。 */
+.more-leave-active :deep(.grid > .cell) {
+  animation: cell-out 0.26s cubic-bezier(0.4, 0, 1, 1) both;
+  animation-delay: calc((var(--n, 6) - 1 - var(--i, 0)) * 26ms);
+}
+
+@keyframes cell-out {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(12px) scale(0.97);
+  }
 }
 
 .inner {

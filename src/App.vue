@@ -3,7 +3,7 @@
     <Loading v-if="loading" />
   </Transition>
   <Background />
-  <div class="page" :class="{ ready: !loading }">
+  <div class="page" :class="{ ready: !loading, 'panel-return': returning }">
     <main class="container">
       <section class="col">
         <div
@@ -31,13 +31,16 @@
     </main>
     <Footer class="rise" style="--d: 0.55s" />
   </div>
-  <Transition name="more">
+  <!-- 时长显式给：面板本体不做过渡（一动背景就跟着动），
+       动画全在面板内部（卡片错峰浮起/沉下），靠 class 钩子触发，所以要让 Vue
+       把 enter/leave-active 保留足够久 -->
+  <Transition name="more" :duration="{ enter: 620, leave: 420 }">
     <MorePanel v-if="showMore" @close="showMore = false" />
   </Transition>
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted } from "vue";
+import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
 import { applyTilt } from "@/utils/tilt";
 import { initCursor } from "@/utils/cursor";
@@ -56,6 +59,9 @@ import Footer from "@/components/Footer.vue";
 const loading = ref(true);
 // 二级「探索更多」面板开关
 const showMore = ref(false);
+// 返回一级时给主页内容补一次浮起动画（见样式里的 .panel-return）
+const returning = ref(false);
+let returnTimer = null;
 // 主页卡片开关（siteConfig.homeCards，缺省视为开启）
 const homeCards = {
   greet: siteConfig.homeCards?.greet !== false,
@@ -66,9 +72,14 @@ const homeCards = {
   siteLinks: siteConfig.homeCards?.siteLinks !== false,
 };
 
-// 面板打开时锁定背景滚动
+// 面板打开时锁定背景滚动；关闭时给主页补一次"浮起"接住二级卡片的依次沉下
 watch(showMore, (v) => {
   document.body.style.overflow = v ? "hidden" : "";
+  if (!v) {
+    returning.value = true;
+    clearTimeout(returnTimer);
+    returnTimer = setTimeout(() => (returning.value = false), 520);
+  }
 });
 
 onMounted(() => {
@@ -100,6 +111,8 @@ onMounted(() => {
     initCursor();
   }
 });
+
+onUnmounted(() => clearTimeout(returnTimer));
 </script>
 
 <style scoped>
@@ -148,21 +161,26 @@ onMounted(() => {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 二级面板过渡：整屏进出 + 只做位移，绝不带 opacity。
-   1) 不带 opacity：与 .rise 同一个坑——Chromium 在 opacity 动画期间暂停 backdrop-filter
-      渲染，淡入的这段时间里卡片"只透底没模糊"，动画结束模糊才补上（毛玻璃慢半拍）。
-   2) 位移用整屏 100% 而不是 24px：面板是不透明的，整屏滑动等于"抽走一张不透明的卡面"，
-      主页被逐步露出；如果只挪 24px 再卸载，收尾会变成两套卡片整体对调的硬切。
-   面板不透明后也不需要再隐藏主页——它本来就看不见，省掉一次图层显隐，
-   卡片模糊也就不会因为背景突变而逐帧重算（那是"交叉抖动"的来源）。 */
-.more-enter-active,
-.more-leave-active {
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+/* 二级面板过渡：面板本体不做任何动画。
+   它自带一张壁纸层，面板一动背景就整块跟着平移，非常假（上一版整屏滑动就是这么丑的）；
+   而面板背景与一级是同一张壁纸，所以"瞬间出现/消失"在视觉上本来就是无缝的。
+   真正的动效交给面板内部的卡片（依次浮起 / 反向沉下，见 MorePanel），
+   以及下面的"返回一级时主页内容轻轻浮起"。 */
+
+/* 从二级返回一级：二级卡片是依次沉下去的，主页若直接硬切出现会很生硬，
+   让主页内容轻轻浮起一次接住。对 .container 整体做位移——只改 transform，
+   不会像 opacity 那样压住卡片的 backdrop-filter（这是本项目反复踩过的坑）。 */
+.page.panel-return .container {
+  animation: page-return 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
-.more-enter-from,
-.more-leave-to {
-  transform: translateY(100%);
+@keyframes page-return {
+  from {
+    transform: translateY(14px);
+  }
+  to {
+    transform: none;
+  }
 }
 
 .site-name {
