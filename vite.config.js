@@ -17,6 +17,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/blog-rss/, "/rss.xml"),
       },
+      "/netease-search": {
+        target: "https://music.163.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/netease-search/, "/api/search/get/web"),
+      },
+      "/netease-album": {
+        target: "https://music.163.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/netease-album/, "/api/v1/album"),
+      },
     },
   },
   preview: {
@@ -25,6 +35,16 @@ export default defineConfig({
         target: "https://blog.zlion.top",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/blog-rss/, "/rss.xml"),
+      },
+      "/netease-search": {
+        target: "https://music.163.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/netease-search/, "/api/search/get/web"),
+      },
+      "/netease-album": {
+        target: "https://music.163.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/netease-album/, "/api/v1/album"),
       },
     },
   },

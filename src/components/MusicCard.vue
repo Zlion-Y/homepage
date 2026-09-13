@@ -14,7 +14,7 @@
             v-show="coverLoaded"
             class="cover-img"
             :class="{ spinning: coverSpinning }"
-            :src="track.pic"
+            :src="hdCover(track.pic)"
             :style="{ animationPlayState: playing ? 'running' : 'paused' }"
             alt=""
             @load="coverLoaded = true"
@@ -145,7 +145,7 @@
             </div>
             <p class="fs-from">正在播放</p>
 
-            <img v-if="!fsLrcOpen && track.pic" class="fs-cover" :src="track.pic" alt="" />
+            <img v-if="!fsLrcOpen && track.pic" class="fs-cover" :src="fsCoverSrc || hdCover(track.pic)" alt="" />
             <div v-else-if="!fsLrcOpen" class="fs-cover fs-cover-ph">
               <Icon name="music" :size="64" />
             </div>
@@ -195,12 +195,11 @@
             </div>
 
             <div class="fs-volume">
-              <button class="fs-vol-btn" title="静音" @click="toggleMute">
-                <Icon :name="isMuted || volume === 0 ? 'volume-x' : 'volume-2'" :size="18" />
-              </button>
               <div class="fs-vol-track" @click="setVol">
                 <div class="fs-vol-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }"></div>
               </div>
+              <Icon class="fs-vol-ic low" :name="isMuted || volume === 0 ? 'volume-x' : 'volume-1'" :size="15" />
+              <Icon class="fs-vol-ic high" name="volume-2" :size="15" />
             </div>
           </div>
         </div>
@@ -244,15 +243,85 @@ const fsOpen = ref(false);
 const fsLrcOpen = ref(false);
 const fsLrcEl = ref(null);
 const fsSheet = ref(null);
+const fsCoverSrc = ref("");
 let fsPrevBodyOverflow = "";
 const fsBg = computed(() =>
-  track.value.pic ? { backgroundImage: `url("${track.value.pic}")` } : {}
+  track.value.pic ? { backgroundImage: `url("${hdCover(track.value.pic)}")` } : {}
 );
+
+// 候选封面探针：不同 Meting 源的封面分辨率不同（moeyao 仅 90px，injahow/i-meto 可出 1024），
+// 并行加载选尺寸最大的；都小则退回默认
+function probeImage(url, ms = 5000) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    let settled = false;
+    const done = (w) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(t);
+      resolve(w);
+    };
+    const t = setTimeout(() => done(0), ms);
+    img.onload = () => done(img.naturalWidth);
+    img.onerror = () => done(0);
+    img.src = url;
+  });
+}
+
+async function resolveFsCover() {
+  const t = track.value;
+  if (!t || !t.pic) {
+    fsCoverSrc.value = "";
+    return;
+  }
+  const base = hdCover(t.pic);
+  fsCoverSrc.value = base;
+  const id = (t.url.match(/[?&]id=([^&]+)/) || [])[1];
+
+  // 首选：网易云官方接口（经同源代理，参考 Halcyon 的数据源）：
+  // 搜歌拿专辑 ID → 专辑详情取官方封面 picUrl，1024 高清
+  try {
+    const q = encodeURIComponent((t.name || "").trim());
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 5000);
+    const search = await fetch(`/netease-search?s=${q}&type=1&limit=3`, { signal: ctrl.signal }).then((r) => r.json());
+    const albumId = search?.result?.songs?.[0]?.album?.id;
+    if (albumId) {
+      const ctrl2 = new AbortController();
+      setTimeout(() => ctrl2.abort(), 5000);
+      const detail = await fetch(`/netease-album/${albumId}`, { signal: ctrl2.signal }).then((r) => r.json());
+      const pic = detail?.album?.picUrl;
+      if (pic) {
+        fsCoverSrc.value = pic.replace(/^http:\/\//i, "https://") + "?param=1024y1024";
+        return;
+      }
+    }
+  } catch {
+    // 本地预览无该代理或接口失败：走探针候选
+  }
+
+  // 次选：各 Meting 源的 1024 封面探针
+  if (id) {
+    const cands = [
+      `https://api.injahow.cn/meting/?server=netease&type=cover&id=${id}&size=1024`,
+      `https://api.i-meto.com/meting/api?server=netease&type=cover&id=${id}&size=1024`,
+    ];
+    const widths = await Promise.all(cands.map((u) => probeImage(u)));
+    if (fsOpen.value && track.value === t) {
+      let best = { url: base, w: 0 };
+      cands.forEach((u, i) => {
+        if (widths[i] > best.w) best = { url: u, w: widths[i] };
+      });
+      if (best.w > 90 && best.url !== base) fsCoverSrc.value = best.url;
+    }
+  }
+}
 
 function openFs() {
   fsOpen.value = true;
   fsPrevBodyOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden"; // 全屏期间锁背景滚动
+  resolveFsCover();
   nextTick(() => {
     if (fsLrcOpen.value) fsLrcFollow(true);
   });
@@ -331,6 +400,18 @@ let scrollTimeout = null;
 const track = computed(() => playlist.value[index.value] || { name: "音乐", artist: "未在播放" });
 const pct = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0));
 const coverSpinning = computed(() => playing.value);
+
+// 全屏开着切歌时，封面也重新解析高清版
+watch(track, () => {
+  if (fsOpen.value) resolveFsCover();
+});
+
+// 网易云 CDN 加尺寸参数取高清封面（1024²），其他图源原样返回
+function hdCover(u) {
+  if (!u) return u;
+  const s = u.replace(/^http:\/\//i, "https://");
+  return /music\.126\.net/.test(s) && !s.includes("param=") ? s + "?param=1024y1024" : s;
+}
 const modeIcon = computed(() =>
   playMode.value === 2 ? "shuffle" : playMode.value === 1 ? "repeat-one" : "repeat"
 );
@@ -1577,26 +1658,19 @@ onUnmounted(() => {
 }
 
 .fs-volume {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  position: relative;
   margin-top: 18px;
+  height: 28px;
   flex-shrink: 0;
 }
 
-.fs-vol-btn {
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 4px;
-}
-
+/* 滑条通栏与进度条对齐，两端小图标叠放其上（Apple 同款） */
 .fs-vol-track {
-  flex: 1;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   height: 6px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.22);
@@ -1608,6 +1682,22 @@ onUnmounted(() => {
   height: 100%;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.85);
+}
+
+.fs-vol-ic {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.65);
+  pointer-events: none;
+}
+
+.fs-vol-ic.low {
+  left: 0;
+}
+
+.fs-vol-ic.high {
+  right: 0;
 }
 
 /* 进出场：上滑淡入 */

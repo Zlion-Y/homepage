@@ -75,6 +75,9 @@ export const siteConfig = {
   hotPlatforms: ["weibo", "bilibili", "v2ex", "ithome", "hellogithub"],
 };
 
+/* 外域同源代理（Vercel rewrites；本地由 vite server/preview proxy 提供），
+   解决浏览器跨域限制：音乐卡高清封面走网易云官方搜索接口 */
+
 // 社交链接
 // icon 可选：github / mail / bilibili / telegram / qq / rss
 export const socialLinks = [
