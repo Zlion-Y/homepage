@@ -137,7 +137,7 @@
     <Teleport to="body">
       <Transition name="fs">
         <div v-if="fsOpen" class="fs-player">
-          <div class="fs-bg" :style="fsBg"></div>
+          <div v-if="track.pic" class="fs-bg" :style="fsBg"></div>
           <div class="fs-shade"></div>
           <div class="fs-sheet" ref="fsSheet">
             <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
@@ -145,21 +145,23 @@
             </div>
             <p class="fs-from">正在播放</p>
 
-            <img v-if="!fsLrcOpen && track.pic" class="fs-cover" :src="fsCoverSrc || hdCover(track.pic)" alt="" />
-            <div v-else-if="!fsLrcOpen" class="fs-cover fs-cover-ph">
-              <Icon name="music" :size="64" />
-            </div>
-            <div v-show="fsLrcOpen" class="fs-lrc" ref="fsLrcEl">
-              <div
-                v-for="(line, i) in lyrics"
-                :key="i"
-                class="fs-lrc-line"
-                :class="{ active: i === lrcIndex }"
-                @click="seekTo(line.time)"
-              >
-                {{ line.text }}
+            <div class="fs-cover-zone">
+              <img v-if="!fsLrcOpen && fsCoverSrc" class="fs-cover" :src="fsCoverSrc" alt="" />
+              <div v-else-if="!fsLrcOpen" class="fs-cover fs-cover-ph">
+                <Icon name="music" :size="64" />
               </div>
-              <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
+              <div v-show="fsLrcOpen" class="fs-lrc" ref="fsLrcEl">
+                <div
+                  v-for="(line, i) in lyrics"
+                  :key="i"
+                  class="fs-lrc-line"
+                  :class="{ active: i === lrcIndex }"
+                  @click="seekTo(line.time)"
+                >
+                  {{ line.text }}
+                </div>
+                <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
+              </div>
             </div>
 
             <div class="fs-info">
@@ -197,9 +199,8 @@
             <div class="fs-volume">
               <div class="fs-vol-track" @click="setVol">
                 <div class="fs-vol-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }"></div>
+                <div class="fs-vol-thumb" :style="{ left: (isMuted ? 0 : volume * 100) + '%' }"></div>
               </div>
-              <Icon class="fs-vol-ic low" :name="isMuted || volume === 0 ? 'volume-x' : 'volume-1'" :size="15" />
-              <Icon class="fs-vol-ic high" name="volume-2" :size="15" />
             </div>
           </div>
         </div>
@@ -245,9 +246,11 @@ const fsLrcEl = ref(null);
 const fsSheet = ref(null);
 const fsCoverSrc = ref("");
 let fsPrevBodyOverflow = "";
-const fsBg = computed(() =>
-  track.value.pic ? { backgroundImage: `url("${hdCover(track.value.pic)}")` } : {}
-);
+// 背景用解析出的封面（官方高清优先后自动跟随）动态模糊
+const fsBg = computed(() => {
+  const u = fsCoverSrc.value || hdCover(track.value.pic);
+  return u ? { backgroundImage: `url("${u}")` } : {};
+});
 
 // 候选封面探针：不同 Meting 源的封面分辨率不同（moeyao 仅 90px，injahow/i-meto 可出 1024），
 // 并行加载选尺寸最大的；都小则退回默认
@@ -1440,10 +1443,6 @@ onUnmounted(() => {
   transform: scale(1.12);
 }
 
-/* 无封面时背景层隐藏，露出默认深色渐变 */
-.fs-bg:empty {
-  display: none;
-}
 
 .fs-shade {
   position: absolute;
@@ -1482,19 +1481,29 @@ onUnmounted(() => {
   font-size: 0.66rem;
   letter-spacing: 2.5px;
   color: rgba(255, 255, 255, 0.55);
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   flex-shrink: 0;
 }
 
+/* 封面/歌词区：占据全部剩余空间并居中，消除底部空洞 */
+.fs-cover-zone {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
 .fs-cover {
-  width: min(78%, 330px);
+  max-width: min(78%, 330px);
+  max-height: 100%;
+  width: auto;
+  height: auto;
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 12px;
-  margin: 4px auto 8px;
   box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
-  flex-shrink: 1;
-  min-height: 0;
 }
 
 .fs-cover-ph {
@@ -1506,13 +1515,13 @@ onUnmounted(() => {
 
 .fs-lrc {
   position: relative; /* offsetTop 以本容器为基准，当前句居中定位才准 */
+  align-self: stretch;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   /* 关闭滚动锚定：行高亮切换会改变行高，锚定补偿会把跟随位置越拖越远 */
   overflow-anchor: none;
-  margin: 10px 0;
-  padding: 12px 8px;
+  padding: 30px 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1658,24 +1667,17 @@ onUnmounted(() => {
 }
 
 .fs-volume {
-  position: relative;
   margin-top: 18px;
-  height: 28px;
   flex-shrink: 0;
 }
 
-/* 滑条通栏与进度条对齐，两端小图标叠放其上（Apple 同款） */
+/* 音量条：与进度条同款样式（带拇指），宽度与进度条对齐 */
 .fs-vol-track {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
   height: 6px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.22);
   cursor: pointer;
-  overflow: hidden;
+  position: relative;
 }
 
 .fs-vol-fill {
@@ -1684,20 +1686,15 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.85);
 }
 
-.fs-vol-ic {
+.fs-vol-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
   position: absolute;
   top: 50%;
-  transform: translateY(-50%);
-  color: rgba(255, 255, 255, 0.65);
-  pointer-events: none;
-}
-
-.fs-vol-ic.low {
-  left: 0;
-}
-
-.fs-vol-ic.high {
-  right: 0;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* 进出场：上滑淡入 */
