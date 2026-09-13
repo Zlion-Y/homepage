@@ -2079,6 +2079,27 @@ onUnmounted(() => {
   font-size: 1.22rem;
 }
 
+/* 手机端竖排：封面在歌词尚未滚动时四周太空。实测 390×844：封面只有 210px 宽
+   （屏幕的 54%），且封面底到第一句歌词之间空了 186px——那是歌词区 45% 的居中
+   占位叠上 30px 上内距。两头一起收：封面放大填满宽度，歌词区首句往上提，
+   中间空当从 186px 压到 90px 左右。
+   封面同时用 vh 兜底，矮屏手机不至于把歌词区挤到只剩两行。
+   居中占位留 24%：后续句子仍能滚到正中，只有开头一两句会被顶到上限（属正常）。 */
+@media (max-width: 979px) {
+  .fs-cover-box {
+    width: min(76%, 300px, 33vh);
+  }
+
+  .fs-lrc {
+    padding: 16px 8px 20px;
+  }
+
+  .fs-lrc::before,
+  .fs-lrc::after {
+    height: 24%;
+  }
+}
+
 .fs-info {
   flex-shrink: 0;
   margin-top: 16px;
