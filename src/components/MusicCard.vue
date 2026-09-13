@@ -315,40 +315,48 @@ async function resolveFsCover() {
     fsCoverSrc.value = "";
     return;
   }
-  // 封面只走网易云官方接口（不使用 Meting 封面代理）；
-  // 切歌时保留当前封面不重置，官方解析成功原地替换（缓存命中秒切，全程无闪烁）
+  const base = hdCover(t.pic);
   const cached = fsCoverCache.get(t.name);
   if (cached) {
     fsCoverSrc.value = cached;
     return;
   }
 
+  // 官方封面：先按原名搜，搜不到再用去掉括号后缀（Live/伴奏/Cover 等）的名字搜
+  let done = false;
   try {
-    const q = encodeURIComponent((t.name || "").trim());
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 8000);
-    const search = await fetch(`/netease-search?s=${q}&type=1&limit=3`, { signal: ctrl.signal }).then((r) => r.json());
-    const albumId = search?.result?.songs?.[0]?.album?.id;
-    if (!albumId) return;
-    const ctrl2 = new AbortController();
-    setTimeout(() => ctrl2.abort(), 8000);
-    const detail = await fetch(`/netease-album/${albumId}`, { signal: ctrl2.signal }).then((r) => r.json());
-    const pic = detail?.album?.picUrl;
-    if (pic) {
+    const cleanName = (t.name || "").replace(/[（(【\[].*?[)）】\]]/g, "").trim();
+    const queries = [t.name, cleanName].filter((q, i, a) => q && a.indexOf(q) === i);
+    for (const q of queries) {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 8000);
+      const search = await fetch(`/netease-search?s=${encodeURIComponent(q)}&type=1&limit=3`, { signal: ctrl.signal }).then((r) => r.json());
+      const albumId = search?.result?.songs?.[0]?.album?.id;
+      if (!albumId) continue;
+      const ctrl2 = new AbortController();
+      setTimeout(() => ctrl2.abort(), 8000);
+      const detail = await fetch(`/netease-album/${albumId}`, { signal: ctrl2.signal }).then((r) => r.json());
+      const pic = detail?.album?.picUrl;
+      if (!pic) continue;
       const hd = pic.replace(/^http:\/\//i, "https://") + "?param=1024y1024";
       fsCoverCache.set(t.name, hd);
-      // 歌曲未再变化时才替换，避免慢响应覆盖新歌的封面
       if (track.value === t) {
         fsCoverSrc.value = hd;
         resolveDominantColor(t.name, hd);
         syncBgShown();
       }
+      done = true;
+      break;
     }
   } catch {
-    // 官方接口失败：回落播放列表自带封面
-    const fallback = hdCover(t.pic);
-    fsCoverSrc.value = fallback;
-    resolveDominantColor(t.name, fallback);
+    // 官方接口异常：走下面的兜底
+  }
+
+  // 官方拿不到（搜不到专辑/接口异常）：回落播放列表自带封面，保证全屏有封面与背景
+  if (!done && track.value === t) {
+    fsCoverSrc.value = base;
+    resolveDominantColor(t.name, base);
+    syncBgShown();
   }
 }
 
