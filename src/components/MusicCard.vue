@@ -2154,7 +2154,6 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  contain: content; /* 同上：歌词重绘不牵动背景层 */
   /* 关闭滚动锚定：行高亮切换会改变行高，锚定补偿会把跟随位置越拖越远 */
   overflow-anchor: none;
   padding: 30px 8px;
@@ -2578,8 +2577,6 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* 绘制隔离：队列挂载/滚动只在自身范围内重绘，不牵动大面积背景动画层重栅格化 */
-  contain: content;
   display: flex;
   flex-direction: column;
   gap: 10px;
