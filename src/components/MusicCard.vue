@@ -11,6 +11,7 @@
         <div class="cover-circle">
           <Icon name="music" :size="24" class="cover-ph" />
           <img
+            ref="coverImg"
             v-show="coverLoaded"
             class="cover-img"
             :class="{ spinning: coverSpinning }"
@@ -103,7 +104,14 @@
             @click="playIndex(i)"
           >
             <div class="pi-cover">
-              <img v-if="t.pic" :src="t.pic" loading="lazy" decoding="async" alt="" />
+              <img
+                v-if="t.pic && !t.__err"
+                :src="t.pic"
+                :loading="Math.abs(i - index) < 14 ? 'eager' : 'lazy'"
+                decoding="async"
+                alt=""
+                @error="t.__err = true"
+              />
               <Icon v-else name="music" :size="13" class="pi-ph" />
               <div class="pi-overlay" v-show="i === index">
                 <div class="eq-bars" v-show="playing">
@@ -137,13 +145,14 @@
           <div class="fs-color-wash" :style="fsWashStyle"></div>
           <div class="fs-bg-wrap">
             <img
-              v-if="fsCoverSrc"
+              v-if="fsBgSrc"
               ref="fsBgImg"
               class="fs-bg-img"
               :class="{ show: bgShown }"
-              :src="fsCoverSrc"
+              :src="fsBgSrc"
               alt=""
               @load="bgShown = true"
+              @error="bgShown = false"
             />
           </div>
           <div class="fs-grad-1" :style="fsGradStyle"></div>
@@ -163,8 +172,17 @@
                 <div class="fs-cover-zone">
                   <div class="fs-cover-box" ref="fsCoverBox" @mousemove="fsCoverMove" @mouseenter="fsCoverEnter" @mouseleave="fsCoverLeave">
                     <div class="fs-cover-inner" :style="{ transform: fsCoverTransform }">
-                      <img v-if="fsCoverSrc" class="fs-cover" :src="fsCoverSrc" alt="" draggable="false" />
-                      <div v-else class="fs-cover fs-cover-ph"><Icon name="music" :size="64" /></div>
+                      <img
+                        v-if="fsCoverSrc"
+                        class="fs-cover"
+                        :src="fsCoverSrc"
+                        alt=""
+                        draggable="false"
+                        @error="onFsCoverError"
+                      />
+                      <div v-else class="fs-cover fs-cover-ph">
+                        <LogoBadge :size="88" />
+                      </div>
                       <div class="fs-shine" :style="{ background: fsShineBg, opacity: fsHovering ? 1 : 0 }"></div>
                     </div>
                     <div class="fs-cover-shadow" :style="{ transform: fsShadowTransform }"></div>
@@ -193,7 +211,15 @@
                       :class="{ active: i === index }"
                       @click="fsPickQueue(i)"
                     >
-                      <img v-if="t.pic" class="fs-q-cov" :src="hdCover(t.pic)" decoding="async" alt="" />
+                      <img
+                        v-if="t.pic && !t.__err"
+                        class="fs-q-cov"
+                        :src="hdCover(t.pic)"
+                        :loading="Math.abs(i - index) < 14 ? 'eager' : 'lazy'"
+                        decoding="async"
+                        alt=""
+                        @error="t.__err = true"
+                      />
                       <div v-else class="fs-q-cov fs-q-ph"><Icon name="music" :size="16" /></div>
                       <div class="fs-q-meta">
                         <div class="fs-q-name">{{ t.name }}</div>
@@ -262,6 +288,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
+import LogoBadge from "@/components/LogoBadge.vue";
 
 // Meting 数据源：与博客完全一致——i-meto 主源（博客实测手机网络可用）+ 两备源
 const APIS = [
@@ -283,6 +310,7 @@ const duration = ref(0);
 const lyrics = ref([]);
 const lrcIndex = ref(-1);
 const coverLoaded = ref(false);
+const coverImg = ref(null);
 
 const lrcOpen = ref(false);
 const plOpen = ref(true); // 播放列表默认展开（手机端有 230px 封顶内滚，不会撑长卡片）
@@ -297,6 +325,8 @@ const fsSheet = ref(null);
 const fsCoverBox = ref(null);
 const fsBgImg = ref(null);
 const fsCoverSrc = ref("");
+// 无封面时全屏背景回退到站点壁纸（优先复用当前页面已加载的那张）
+const fsWallpaper = ref("");
 const bgShown = ref(false); // 背景大图首次加载完成后淡入（此后原地换图不闪）
 let fsPrevBodyOverflow = "";
 // 官方封面解析缓存（会话内）：歌名 → 官方 picUrl，切回听过的歌不再重复请求
@@ -312,8 +342,11 @@ const fsModeTitle = computed(() => ({ 0: "顺序播放", 1: "单曲循环", 2: "
 
 async function resolveFsCover() {
   const t = track.value;
+  fsWallpaper.value = currentWallpaper();
   if (!t || !t.pic) {
+    // 没有封面：清空封面与主色，背景交给壁纸兜底
     fsCoverSrc.value = "";
+    fsDominant.value = null;
     return;
   }
   const base = hdCover(t.pic);
@@ -361,11 +394,13 @@ async function resolveFsCover() {
   }
 }
 
-// 缓存命中时 img 的 load 事件可能早于监听器挂载，靠 complete 兜底点亮背景
+// 缓存命中时 img 的 load 事件可能早于监听器挂载，靠 complete 兜底点亮（背景 + 小卡封面同理）
 function syncBgShown() {
   nextTick(() => {
-    const img = fsBgImg.value;
-    if (img && img.complete && img.naturalWidth > 0) bgShown.value = true;
+    const bg = fsBgImg.value;
+    if (bg && bg.complete && bg.naturalWidth > 0) bgShown.value = true;
+    const cv = coverImg.value;
+    if (cv && cv.complete && cv.naturalWidth > 0) coverLoaded.value = true;
   });
 }
 
@@ -480,6 +515,21 @@ const fsGradStyle2 = computed(() => {
     background: `radial-gradient(circle at 78% 84%, hsl(${h2.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}% / 0.22) 0%, transparent 62%)`,
   };
 });
+
+// 当前站点壁纸：优先复用页面已加载的图，其次配置的随机壁纸接口，最后本地图
+function currentWallpaper() {
+  const el = document.querySelector("img.custom");
+  if (el && el.naturalWidth > 0) return el.src;
+  return siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
+}
+// 全屏背景源：有封面用封面，没封面用壁纸兜底
+const fsBgSrc = computed(() => fsCoverSrc.value || fsWallpaper.value);
+
+// 封面加载失败：退回占位（Logo）+ 壁纸兜底背景
+function onFsCoverError() {
+  fsCoverSrc.value = "";
+  fsDominant.value = null;
+}
 
 // 封面 3D 倾斜 + 光泽 + 投影（useCoverTilt 同款数学）
 const fsHovering = ref(false);
@@ -1080,6 +1130,7 @@ function loadAndPlay(i, autoPlay = true) {
   loadLyrics(t);
   prefetchNextLyrics();
   coverLoaded.value = false;
+  syncBgShown();
   currentTime.value = 0;
   duration.value = 0;
   if (autoPlay) {
@@ -2034,8 +2085,15 @@ onUnmounted(() => {
 .fs-cover-ph {
   display: grid;
   place-items: center;
-  color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(120% 100% at 50% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 60%),
+    rgba(10, 12, 20, 0.55);
+}
+
+.fs-cover-ph :deep(svg),
+.fs-cover-ph :deep(img) {
+  opacity: 0.9;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
 }
 
 .fs-lrc {
