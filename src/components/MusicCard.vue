@@ -14,7 +14,7 @@
             v-show="coverLoaded"
             class="cover-img"
             :class="{ spinning: coverSpinning }"
-            :src="hdCover(track.pic)"
+            :src="fsCoverSrc || hdCover(track.pic)"
             :style="{ animationPlayState: playing ? 'running' : 'paused' }"
             alt=""
             @load="coverLoaded = true"
@@ -140,7 +140,6 @@
           <div class="fs-bg-wrap">
             <img
               v-if="fsCoverSrc"
-              :key="fsCoverSrc"
               class="fs-bg-img"
               :class="{ show: bgShown }"
               :src="fsCoverSrc"
@@ -158,12 +157,9 @@
             <div class="fs-cover-zone">
               <img
                 v-if="!fsLrcOpen && fsCoverSrc"
-                :key="fsCoverSrc"
                 class="fs-cover"
-                :class="{ show: coverShown }"
                 :src="fsCoverSrc"
                 alt=""
-                @load="coverShown = true"
               />
               <div v-else-if="!fsLrcOpen" class="fs-cover fs-cover-ph">
                 <Icon name="music" :size="64" />
@@ -263,28 +259,10 @@ const fsLrcOpen = ref(false);
 const fsLrcEl = ref(null);
 const fsSheet = ref(null);
 const fsCoverSrc = ref("");
-const bgShown = ref(false); // 背景大图加载完成后淡入
-const coverShown = ref(false); // 封面加载完成后淡入
+const bgShown = ref(false); // 背景大图首次加载完成后淡入（此后原地换图不闪）
 let fsPrevBodyOverflow = "";
-
-// 候选封面探针：不同 Meting 源的封面分辨率不同（moeyao 仅 90px，injahow/i-meto 可出 1024），
-// 并行加载选尺寸最大的；都小则退回默认
-function probeImage(url, ms = 5000) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    let settled = false;
-    const done = (w) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(t);
-      resolve(w);
-    };
-    const t = setTimeout(() => done(0), ms);
-    img.onload = () => done(img.naturalWidth);
-    img.onerror = () => done(0);
-    img.src = url;
-  });
-}
+// 官方封面解析缓存（会话内）：歌名 → 官方 picUrl，切回听过的歌不再重复请求
+const fsCoverCache = new Map();
 
 async function resolveFsCover() {
   const t = track.value;
@@ -292,46 +270,34 @@ async function resolveFsCover() {
     fsCoverSrc.value = "";
     return;
   }
-  const base = hdCover(t.pic);
-  fsCoverSrc.value = base;
-  const id = (t.url.match(/[?&]id=([^&]+)/) || [])[1];
+  // 封面只走网易云官方接口（不使用 Meting 封面代理）；
+  // 切歌时保留当前封面不重置，官方解析成功原地替换（缓存命中秒切，全程无闪烁）
+  const cached = fsCoverCache.get(t.name);
+  if (cached) {
+    fsCoverSrc.value = cached;
+    return;
+  }
 
-  // 首选：网易云官方接口（经同源代理，参考 Halcyon 的数据源）：
-  // 搜歌拿专辑 ID → 专辑详情取官方封面 picUrl，1024 高清
   try {
     const q = encodeURIComponent((t.name || "").trim());
     const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 5000);
+    setTimeout(() => ctrl.abort(), 8000);
     const search = await fetch(`/netease-search?s=${q}&type=1&limit=3`, { signal: ctrl.signal }).then((r) => r.json());
     const albumId = search?.result?.songs?.[0]?.album?.id;
-    if (albumId) {
-      const ctrl2 = new AbortController();
-      setTimeout(() => ctrl2.abort(), 5000);
-      const detail = await fetch(`/netease-album/${albumId}`, { signal: ctrl2.signal }).then((r) => r.json());
-      const pic = detail?.album?.picUrl;
-      if (pic) {
-        fsCoverSrc.value = pic.replace(/^http:\/\//i, "https://") + "?param=1024y1024";
-        return;
-      }
+    if (!albumId) return;
+    const ctrl2 = new AbortController();
+    setTimeout(() => ctrl2.abort(), 8000);
+    const detail = await fetch(`/netease-album/${albumId}`, { signal: ctrl2.signal }).then((r) => r.json());
+    const pic = detail?.album?.picUrl;
+    if (pic) {
+      const hd = pic.replace(/^http:\/\//i, "https://") + "?param=1024y1024";
+      fsCoverCache.set(t.name, hd);
+      // 歌曲未再变化时才替换，避免慢响应覆盖新歌的封面
+      if (track.value === t) fsCoverSrc.value = hd;
     }
   } catch {
-    // 本地预览无该代理或接口失败：走探针候选
-  }
-
-  // 次选：各 Meting 源的 1024 封面探针
-  if (id) {
-    const cands = [
-      `https://api.injahow.cn/meting/?server=netease&type=cover&id=${id}&size=1024`,
-      `https://api.i-meto.com/meting/api?server=netease&type=cover&id=${id}&size=1024`,
-    ];
-    const widths = await Promise.all(cands.map((u) => probeImage(u)));
-    if (fsOpen.value && track.value === t) {
-      let best = { url: base, w: 0 };
-      cands.forEach((u, i) => {
-        if (widths[i] > best.w) best = { url: u, w: widths[i] };
-      });
-      if (best.w > 90 && best.url !== base) fsCoverSrc.value = best.url;
-    }
+    // 官方接口失败：回落播放列表自带封面
+    fsCoverSrc.value = hdCover(t.pic);
   }
 }
 
@@ -386,11 +352,7 @@ watch(lrcIndex, () => {
   if (fsOpen.value && fsLrcOpen.value) fsLrcFollow(false);
 });
 
-// 封面源变化（默认小图 → 官方高清）：重置淡入状态，加载完成淡入
-watch(fsCoverSrc, () => {
-  bgShown.value = false;
-  coverShown.value = false;
-});
+
 
 // 顶部横杠下拉关闭（跟手拖拽，超过 90px 松手即关）
 let fsDragY0 = 0;
@@ -425,9 +387,9 @@ const track = computed(() => playlist.value[index.value] || { name: "音乐", ar
 const pct = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0));
 const coverSpinning = computed(() => playing.value);
 
-// 全屏开着切歌时，封面也重新解析高清版
+// 切歌时始终解析官方高清封面（主卡小封面与全屏共用，面板关闭也在后台预取）
 watch(track, () => {
-  if (fsOpen.value) resolveFsCover();
+  resolveFsCover();
 });
 
 // 网易云 CDN 加尺寸参数取高清封面（1024²），其他图源原样返回
