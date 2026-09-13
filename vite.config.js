@@ -27,6 +27,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/netease-album/, "/api/v1/album"),
       },
+      "/netease-songs": {
+        target: "https://music.163.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/netease-songs/, "/api/song/detail/"),
+      },
     },
   },
   preview: {
@@ -45,6 +50,11 @@ export default defineConfig({
         target: "https://music.163.com",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/netease-album/, "/api/v1/album"),
+      },
+      "/netease-songs": {
+        target: "https://music.163.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/netease-songs/, "/api/song/detail/"),
       },
     },
   },

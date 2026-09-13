@@ -356,6 +356,16 @@ async function resolveFsCover() {
     return;
   }
 
+  // 批量详情已解析出官方直链（按歌曲 ID 精确匹配）：直接升到 1024，无需再按名字搜
+  if (/music\.126\.net/.test(t.pic)) {
+    const hd = neteasePic(t.pic, "1024y1024");
+    fsCoverCache.set(t.name, hd);
+    fsCoverSrc.value = hd;
+    resolveDominantColor(t.name, hd);
+    syncBgShown();
+    return;
+  }
+
   // 官方封面：先按原名搜，搜不到再用去掉括号后缀（Live/伴奏/Cover 等）的名字搜
   let done = false;
   try {
@@ -850,6 +860,49 @@ async function fetchPlaylistAll() {
   return Promise.any(APIS.map((api, i) => tryOne(api, i)));
 }
 
+// 歌曲 ID（从音源链接提取）→ 官方歌曲详情批量换高清封面
+function songIdOf(t) {
+  const m = (t.url || "").match(/[?&]id=(\d+)/);
+  return m ? m[1] : "";
+}
+function neteasePic(picUrl, size) {
+  const u = (picUrl || "").replace(/^http:\/\//i, "https://");
+  return /music\.126\.net/.test(u) ? u.replace(/[?&]param=[^&]*/, "") + "?param=" + size : u;
+}
+async function upgradeCovers(tracks) {
+  const items = tracks.map((t) => ({ t, id: songIdOf(t) })).filter((x) => x.id);
+  const CHUNK = 100;
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const part = items.slice(i, i + CHUNK);
+    try {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 10000);
+      const ids = encodeURIComponent("[" + part.map((x) => x.id).join(",") + "]");
+      const res = await fetch(`/netease-songs?ids=${ids}`, { signal: ctrl.signal }).then((r) => r.json());
+      const map = new Map((res.songs || []).map((x) => [String(x.id), (x.album && x.album.picUrl) || ""]));
+      part.forEach(({ t, id }) => {
+        const pic = map.get(String(id));
+        if (pic) t.pic = neteasePic(pic, "300y300");
+      });
+    } catch {
+      // 该批失败：保持原封面
+    }
+  }
+}
+
+// 歌单就绪后异步把整份歌单封面换成官方高清（后台进行，不阻塞展示）
+function scheduleCoverUpgrade() {
+  const tracks = playlist.value;
+  if (!tracks.length) return;
+  upgradeCovers(tracks).then(() => {
+    try {
+      localStorage.setItem(playlistCacheKey, JSON.stringify({ ts: Date.now(), playlist: tracks }));
+    } catch {
+      // 存储失败忽略
+    }
+  });
+}
+
 // ── 歌单预载：页面一打开就开始拉，进二级面板时多半已就绪 ──
 // 缓存 key 绑定歌单 ID：配置改了歌单立即失效，不用清缓存/无痕
 const playlistCacheKey = `music_playlist_v2_${siteConfig.musicPlaylist || "default"}`;
@@ -1320,6 +1373,7 @@ onMounted(async () => {
       }
     }
     if (playlist.value.length) {
+      scheduleCoverUpgrade();
       // 随机预载一首（不自动播），避免每次打开都是同一首
       loadAndPlay(Math.floor(Math.random() * playlist.value.length), false);
     } else {
