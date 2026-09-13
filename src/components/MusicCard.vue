@@ -343,7 +343,7 @@ async function resolveFsCover() {
       fsCoverCache.set(t.name, hd);
       if (track.value === t) {
         fsCoverSrc.value = hd;
-        resolveDominantColor(t.name, hd);
+        resolveDominantColor(t.name, smallCover(hd));
         syncBgShown();
       }
       done = true;
@@ -356,7 +356,7 @@ async function resolveFsCover() {
   // 官方拿不到（搜不到专辑/接口异常）：回落播放列表自带封面，保证全屏有封面与背景
   if (!done && track.value === t) {
     fsCoverSrc.value = base;
-    resolveDominantColor(t.name, base);
+    resolveDominantColor(t.name, smallCover(base));
     syncBgShown();
   }
 }
@@ -420,6 +420,8 @@ async function resolveDominantColor(name, pic) {
   const color = await new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
+    // 允许异步解码：否则这张图会在主线程解码，切歌时掉帧
+    img.decoding = "async";
     const done = (c) => resolve(c);
     img.onload = () => {
       try {
@@ -726,6 +728,15 @@ function hdCover(u) {
   if (!u) return u;
   const s = u.replace(/^http:\/\//i, "https://");
   return /music\.126\.net/.test(s) && !s.includes("param=") ? s + "?param=1024y1024" : s;
+}
+
+// 主色提取只需要一张很小的图：拿 1024 封面去 drawImage 会强制解码整张大图
+// （主线程几十毫秒，切歌/开面板时掉帧）。换 64×64 变体后解码几乎无成本，
+// 而取色本来就降采样到 24×24 求均值，结果一致。
+function smallCover(u) {
+  if (!u) return u;
+  const s = u.replace(/^http:\/\//i, "https://").replace(/\?param=[^&]*/i, "");
+  return /music\.126\.net/.test(s) ? s + "?param=64y64" : s;
 }
 const modeIcon = computed(() =>
   playMode.value === 2 ? "shuffle" : playMode.value === 1 ? "repeat-one" : "repeat"

@@ -72,6 +72,16 @@ onMounted(() => {
     img.onload = () => {
       custom.value = true;
       bgSrcRef.value = url;
+      // 把"实际展示的那张图"的地址挂到根变量，供二级面板复用。
+      // ⚠️必须用 url（模板 :src 绑定的那个）而不是 img.src：探针请求带 r= 随机参数，
+      // 与展示用的 URL 不同，用探针地址会让面板铺上另一张随机图，和主页背景对不上。
+      // 同一个 URL 才能命中缓存，不会二次下载。
+      // 二级面板必须是不透明的：面板卡片要对背景做 backdrop-filter，若面板半透明，
+      // 它下面就是主页卡片，两级卡片会在过渡期间互相透出并逐帧重算模糊（"交叉抖动"）。
+      document.documentElement.style.setProperty(
+        "--bg-src",
+        `url("${new URL(url, location.href).href}")`
+      );
       window.dispatchEvent(new Event("bg-ready"));
     };
     // 失败换下一个源（加随机参数绕开失败缓存）

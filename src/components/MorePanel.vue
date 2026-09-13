@@ -74,12 +74,26 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
   position: fixed;
   inset: 0;
   z-index: 40;
-  /* 背景不模糊，与一级界面一致：只模糊卡片、背景保持清晰。
-     这里原本有一层覆盖整屏的 backdrop-filter: blur(20px) saturate(1.3)，
-     它要对整屏背景逐帧重采样，正是打开面板后 GPU 从约 49% 涨到约 73% 的主因；
-     卡片的毛玻璃由各卡自己的 .glass 提供，观感与一级界面统一。
-     只留一层极浅底色，压一下底下主页的亮度。 */
-  background: rgba(7, 11, 22, 0.08);
+  /* 面板必须不透明：卡片要对背景做 backdrop-filter，面板若半透明，它下面就是主页卡片，
+     两级卡片会互相透出；而且过渡动画期间背景一变（主页被隐/现），卡片的模糊就要逐帧重算，
+     看起来就是两级模糊交叉抖动。做成不透明的"清晰壁纸"，卡片永远只对自己的这层取景。
+     底色先用不透明主题色兜底（壁纸没就绪时也不透光）。 */
+  background: var(--bg);
+}
+
+/* 面板的清晰壁纸层：复用一级界面那张壁纸（--bg-src 是同一个 URL，命中缓存不重复下载），
+   观感与一级背景完全一致——清晰、不模糊。
+   亮度对齐壁纸的 filter: brightness(0.8)，这里用 20% 黑罩叠加实现，
+   刻意不在父层写 filter：filter 会建立 backdrop root，可能影响卡片的 backdrop-filter 取景。 */
+.more::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), var(--bg-src, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
 }
 
 /* 面板卡片是动态挂载的，出现时就已经可见——不预先提升合成层的话，会先画出一层

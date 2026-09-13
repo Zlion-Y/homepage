@@ -3,7 +3,7 @@
     <Loading v-if="loading" />
   </Transition>
   <Background />
-  <div class="page" :class="{ ready: !loading, 'panel-open': showMore }">
+  <div class="page" :class="{ ready: !loading }">
     <main class="container">
       <section class="col">
         <div
@@ -114,15 +114,6 @@ onMounted(() => {
   overflow: clip;
 }
 
-/* 二级面板打开时不再绘制主页卡片：面板背景按要求不做模糊，主页卡片若继续绘制，
-   就会和面板自己的卡片叠在一起（两层卡片互相透出）。隐藏后背景只剩壁纸本身——
-   清晰、不模糊，面板卡片依旧各自毛玻璃，与一级界面观感一致。
-   用 visibility 而非 display：不触发布局，关闭面板时主页原样恢复；
-   关闭瞬间主页立刻回画（面板正在淡出，不会露出空白底）。 */
-.page.panel-open {
-  visibility: hidden;
-}
-
 .container {
   flex: 1;
   width: 100%;
@@ -157,18 +148,21 @@ onMounted(() => {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 二级面板过渡：只做位移，绝不带 opacity。
-   与 .rise 同一个坑——Chromium 在 opacity 动画期间会暂停 backdrop-filter 渲染，
-   面板淡入的 0.35s 里卡片会一直"只透底没模糊"，等淡入结束模糊才补上（看着就是
-   毛玻璃慢半拍）。去掉透明度动画后，卡片一出现模糊就已经在位，与一级界面一致。 */
+/* 二级面板过渡：整屏进出 + 只做位移，绝不带 opacity。
+   1) 不带 opacity：与 .rise 同一个坑——Chromium 在 opacity 动画期间暂停 backdrop-filter
+      渲染，淡入的这段时间里卡片"只透底没模糊"，动画结束模糊才补上（毛玻璃慢半拍）。
+   2) 位移用整屏 100% 而不是 24px：面板是不透明的，整屏滑动等于"抽走一张不透明的卡面"，
+      主页被逐步露出；如果只挪 24px 再卸载，收尾会变成两套卡片整体对调的硬切。
+   面板不透明后也不需要再隐藏主页——它本来就看不见，省掉一次图层显隐，
+   卡片模糊也就不会因为背景突变而逐帧重算（那是"交叉抖动"的来源）。 */
 .more-enter-active,
 .more-leave-active {
-  transition: transform 0.35s ease;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .more-enter-from,
 .more-leave-to {
-  transform: translateY(24px);
+  transform: translateY(100%);
 }
 
 .site-name {
