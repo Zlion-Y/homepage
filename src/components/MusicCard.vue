@@ -145,116 +145,116 @@
             />
           </div>
           <div class="fs-shade"></div>
-          <div class="fs-sheet" ref="fsSheet">
-            <button class="fs-close" title="退出全屏" @click="closeFs">
-              <Icon name="chevron-down" :size="22" />
-            </button>
-            <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
-              <span></span>
-            </div>
-            <p class="fs-from">正在播放</p>
-
-            <div class="fs-main">
-              <!-- 封面（移动端歌词/队列视图时隐藏） -->
-              <div class="fs-cover-zone">
-                <img
-                  v-if="fsCoverSrc"
-                  class="fs-cover"
-                  :src="fsCoverSrc"
-                  alt=""
-                />
-                <div v-else class="fs-cover fs-cover-ph">
-                  <Icon name="music" :size="64" />
-                </div>
+<div class="fs-sheet" ref="fsSheet">
+              <button class="fs-close" title="退出全屏" @click="closeFs">
+                <Icon name="chevron-down" :size="22" />
+              </button>
+              <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
+                <span></span>
               </div>
-              <!-- 歌词 / 播放列表（桌面端右侧栏；移动端覆盖封面视图） -->
-              <div class="fs-side">
-                <div v-show="fsView === 'lyrics'" class="fs-lrc" ref="fsLrcEl">
-                  <div
-                    v-for="(line, i) in lyrics"
-                    :key="i"
-                    class="fs-lrc-line"
-                    :class="{ active: i === lrcIndex }"
-                    @click="seekTo(line.time)"
-                  >
-                    {{ line.text }}
-                  </div>
-                  <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
-                </div>
-                <div v-show="fsView === 'queue'" class="fs-queue">
-                  <div
-                    v-for="(t, i) in playlist"
-                    :key="i"
-                    class="fs-q-row"
-                    :class="{ active: i === index }"
-                    @click="playIndex(i)"
-                  >
-                    <img v-if="t.pic" class="fs-q-cov" :src="hdCover(t.pic)" alt="" />
-                    <div v-else class="fs-q-cov fs-q-ph"><Icon name="music" :size="16" /></div>
-                    <div class="fs-q-meta">
-                      <div class="fs-q-name">{{ t.name }}</div>
-                      <div class="fs-q-artist">{{ t.artist }}</div>
+              <p class="fs-from">正在播放</p>
+
+              <div class="fs-main">
+                <!-- 封面（移动端歌词/队列视图时隐藏） -->
+                <div class="fs-cover-zone">
+                  <div class="fs-cover-box" @mousemove="fsCoverMove" @mouseenter="fsCoverEnter" @mouseleave="fsCoverLeave">
+                    <div class="fs-cover-inner" :style="{ transform: fsCoverTransform }">
+                      <img v-if="fsCoverSrc" class="fs-cover" :src="fsCoverSrc" alt="" draggable="false" />
+                      <div v-else class="fs-cover fs-cover-ph"><Icon name="music" :size="64" /></div>
+                      <div class="fs-shine" :style="{ background: fsShineBg, opacity: fsHovering ? 1 : 0 }"></div>
                     </div>
+                    <div class="fs-cover-shadow" :style="{ transform: fsShadowTransform }"></div>
                   </div>
-                  <div v-if="!playlist.length" class="lrc-empty">歌单为空</div>
+                </div>
+                <!-- 歌词 / 播放列表（桌面端右侧栏；移动端覆盖封面视图） -->
+                <div class="fs-side">
+                  <div v-show="fsView === 'lyrics'" class="fs-lrc" ref="fsLrcEl">
+                    <div
+                      v-for="(line, i) in lyrics"
+                      :key="i"
+                      class="fs-lrc-line"
+                      :class="{ active: i === lrcIndex }"
+                      @click="seekTo(line.time)"
+                    >
+                      {{ line.text }}
+                    </div>
+                    <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
+                  </div>
+                  <div v-show="fsView === 'queue'" class="fs-queue">
+                    <div
+                      v-for="(t, i) in playlist"
+                      :key="i"
+                      class="fs-q-row"
+                      :class="{ active: i === index }"
+                      @click="playIndex(i)"
+                    >
+                      <img v-if="t.pic" class="fs-q-cov" :src="hdCover(t.pic)" alt="" />
+                      <div v-else class="fs-q-cov fs-q-ph"><Icon name="music" :size="16" /></div>
+                      <div class="fs-q-meta">
+                        <div class="fs-q-name">{{ t.name }}</div>
+                        <div class="fs-q-artist">{{ t.artist }}</div>
+                      </div>
+                    </div>
+                    <div v-if="!playlist.length" class="lrc-empty">歌单为空</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div class="fs-info">
-              <div class="fs-titles">
-                <div class="fs-titles-l">
-                  <h3 class="fs-title">{{ track.name || "音乐" }}</h3>
-                  <p class="fs-artist">{{ track.artist || "未在播放" }}</p>
+              <div class="fs-info">
+                <div class="fs-titles">
+                  <div class="fs-titles-l">
+                    <h3 class="fs-title">{{ track.name || "音乐" }}</h3>
+                    <p class="fs-artist">{{ track.artist || "未在播放" }}</p>
+                  </div>
+                  <div class="fs-view-btns">
+                    <button class="fs-view-btn" :class="{ on: fsView === 'lyrics' }" title="歌词" @click="fsToggleView('lyrics')">
+                      <Icon name="subtitles" :size="18" />
+                    </button>
+                    <button class="fs-view-btn" :class="{ on: fsView === 'queue' }" title="播放列表" @click="fsToggleView('queue')">
+                      <Icon name="playlist" :size="18" />
+                    </button>
+                  </div>
                 </div>
-                <div class="fs-view-btns">
-                  <button class="fs-view-btn" :class="{ on: fsView === 'lyrics' }" title="歌词" @click="fsToggleView('lyrics')">
-                    <Icon name="subtitles" :size="18" />
-                  </button>
-                  <button class="fs-view-btn" :class="{ on: fsView === 'queue' }" title="播放列表" @click="fsToggleView('queue')">
-                    <Icon name="playlist" :size="18" />
-                  </button>
-                </div>
               </div>
-            </div>
 
-            <div class="fs-progress" @click="seek">
-              <div class="p-bar" :style="{ width: pct + '%' }"></div>
-              <div class="p-thumb" :style="{ left: pct + '%' }"></div>
-            </div>
-            <div class="fs-times">
-              <span>{{ fmt(currentTime) }}</span>
-              <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
-            </div>
-
-            <div class="fs-bottom">
-              <div class="fs-trackinfo">
-                <span class="ft-name">{{ track.name || "音乐" }}</span>
-                <span class="ft-artist">{{ track.artist || "未在播放" }}</span>
+              <div class="fs-progress" @click="seek">
+                <div class="p-bar" :style="{ width: pct + '%' }"></div>
+                <div class="p-thumb" :style="{ left: pct + '%' }"></div>
               </div>
-              <div class="fs-controls">
-                <button class="fs-btn fs-shuffle" :class="{ on: playMode !== 0 }" title="播放模式" @click="cycleMode">
-                  <Icon :name="modeIcon" :size="24" />
-                </button>
-                <button class="fs-btn" title="上一首" @click="prev()">
-                  <Icon name="skip-back" :size="30" />
-                </button>
-                <button class="fs-btn fs-play" :title="playing ? '暂停' : '播放'" @click="togglePlay">
-                  <Icon :name="playing ? 'pause' : 'play'" :size="42" />
-                </button>
-                <button class="fs-btn" title="下一首" @click="next()">
-                  <Icon name="skip-forward" :size="30" />
-                </button>
-                <button class="fs-btn fs-queuebtn" :class="{ on: fsView === 'queue' }" title="播放列表" @click="fsToggleView('queue')">
-                  <Icon name="playlist" :size="24" />
-                </button>
-              </div>
-              <div class="fs-time">
+              <div class="fs-times">
                 <span>{{ fmt(currentTime) }}</span>
                 <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
               </div>
+
+              <div class="fs-bottom">
+                <div class="fs-trackinfo">
+                  <span class="ft-name">{{ track.name || "音乐" }}</span>
+                  <span class="ft-artist">{{ track.artist || "未在播放" }}</span>
+                </div>
+                <div class="fs-controls">
+                  <button class="fs-side-btn" :title="fsModeTitle" @click="cycleMode">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path :d="fsModeIcon" /></svg>
+                  </button>
+                  <button class="fs-control-btn" title="上一首" @click="prev()">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z" /></svg>
+                  </button>
+                  <button class="fs-play-btn" :title="playing ? '暂停' : '播放'" @click="togglePlay">
+                    <svg v-if="playing" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                    <svg v-else viewBox="0 0 24 24" fill="currentColor"><path d="M8.3 5v14l11-7z" /></svg>
+                  </button>
+                  <button class="fs-control-btn" title="下一首" @click="next()">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
+                  </button>
+                  <button class="fs-side-btn" title="播放列表" @click="fsToggleView('queue')">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z" /></svg>
+                  </button>
+                </div>
+                <div class="fs-time">
+                  <span>{{ fmt(currentTime) }}</span>
+                  <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
+                </div>
+              </div>
             </div>
-          </div>
         </div>
       </Transition>
     </Teleport>
@@ -297,11 +297,20 @@ const fsDesktop = ref(false); // 桌面布局：左封面右歌词队列；移�
 const fsView = ref("cover"); // 全屏视图：cover（仅移动端）/ lyrics / queue
 const fsLrcEl = ref(null);
 const fsSheet = ref(null);
+const fsCoverBox = ref(null);
 const fsCoverSrc = ref("");
 const bgShown = ref(false); // 背景大图首次加载完成后淡入（此后原地换图不闪）
 let fsPrevBodyOverflow = "";
 // 官方封面解析缓存（会话内）：歌名 → 官方 picUrl，切回听过的歌不再重复请求
 const fsCoverCache = new Map();
+// FluentPlayer 同款模式图标（填充路径）：顺序 / 单曲循环 / 随机
+const fsModeIcons = {
+  0: "M7 7h10v2H9v2.5L5.5 8 9 4.5V7zm10 10H7v-2h8v-2.5l3.5 3.5-3.5 3.5V17z",
+  1: "M7 7h10v2H9v2.5L5.5 8 9 4.5V7zm10 10H7v-2h8v-2.5l3.5 3.5-3.5 3.5V17z M12 13c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+  2: "M14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z",
+};
+const fsModeIcon = computed(() => fsModeIcons[playMode.value] || fsModeIcons[0]);
+const fsModeTitle = computed(() => ({ 0: "顺序播放", 1: "单曲循环", 2: "随机播放" }[playMode.value] || "播放模式"));
 
 async function resolveFsCover() {
   const t = track.value;
@@ -355,6 +364,55 @@ function openFs() {
 function closeFs() {
   fsOpen.value = false;
   document.body.style.overflow = fsPrevBodyOverflow;
+}
+
+// 封面 3D 倾斜 + 光泽 + 投影（useCoverTilt 同款数学）
+const fsHovering = ref(false);
+const fsTiltRX = ref(0);
+const fsTiltRY = ref(0);
+const fsShineX = ref(50);
+const fsShineY = ref(50);
+const fsCoverTransform = ref("");
+const fsShadowTransform = computed(() => {
+  if (!fsHovering.value) return "";
+  const x = -fsTiltRY.value * 1.6;
+  const y = fsTiltRX.value * 1.2;
+  const sx = 1 - Math.abs(fsTiltRY.value) * 0.008;
+  const sy = 1 - Math.abs(fsTiltRX.value) * 0.008;
+  return `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
+});
+const fsShineBg = computed(
+  () => `radial-gradient(circle at ${fsShineX.value}% ${fsShineY.value}%, rgba(255,255,255,0.35) 0%, transparent 50%)`
+);
+function fsCoverMove(e) {
+  const box = fsCoverBox.value;
+  if (!box || !fsHovering.value) return;
+  const r = box.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+  fsShineX.value = (x / r.width) * 100;
+  fsShineY.value = (y / r.height) * 100;
+  fsTiltRY.value = ((x - r.width / 2) / (r.width / 2)) * 12;
+  fsTiltRX.value = -((y - r.height / 2) / (r.height / 2)) * 12;
+  fsCoverTransform.value = `perspective(1000px) rotateX(${fsTiltRX.value.toFixed(2)}deg) rotateY(${fsTiltRY.value.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`;
+}
+function fsCoverEnter() {
+  if (!window.matchMedia("(hover: hover)").matches) return;
+  fsHovering.value = true;
+  const inner = fsCoverBox.value?.querySelector(".fs-cover-inner");
+  if (inner) inner.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";
+}
+function fsCoverLeave() {
+  fsHovering.value = false;
+  fsTiltRX.value = 0;
+  fsTiltRY.value = 0;
+  fsShineX.value = 50;
+  fsShineY.value = 50;
+  const inner = fsCoverBox.value?.querySelector(".fs-cover-inner");
+  if (inner) {
+    inner.style.transition = "transform 400ms cubic-bezier(0.22, 1, 0.36, 1)";
+    fsCoverTransform.value = "";
+  }
 }
 
 // 全屏视图切换：桌面端歌词⇄队列；移动端 cover⇄歌词⇄队列
@@ -1678,32 +1736,74 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
+/* 控制按钮（FluentPlayer 规格：填充图标 + 圆盘播放键） */
 .fs-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 14px;
+  justify-content: center;
+  gap: 12px;
   margin-top: 14px;
   flex-shrink: 0;
 }
 
-.fs-btn {
+.fs-control-btn,
+.fs-side-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
+  border-radius: 50%;
   background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.1s ease, color 0.18s ease;
+}
+
+.fs-control-btn:hover,
+.fs-side-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.fs-control-btn:active,
+.fs-side-btn:active {
+  transform: scale(0.95);
+}
+
+.fs-control-btn svg,
+.fs-side-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.fs-play-btn {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
   cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  transition: opacity 0.2s ease;
+  transition: background 0.18s ease, transform 0.1s ease;
 }
 
-.fs-btn:hover {
-  opacity: 0.75;
+.fs-play-btn:hover {
+  background: var(--accent1);
+  color: #fff;
 }
 
-.fs-play {
-  padding: 10px;
+.fs-play-btn:active {
+  transform: scale(0.95);
+}
+
+.fs-play-btn svg {
+  width: 24px;
+  height: 24px;
 }
 
 
@@ -1791,10 +1891,11 @@ onUnmounted(() => {
 }
 
 .fs-desktop .fs-cover {
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
+  /* FluentPlayer 同款封面尺寸公式 */
+  --cover-size: min(clamp(180px, 38vw, 520px), clamp(220px, 45vh, 580px));
+  width: var(--cover-size);
+  height: var(--cover-size);
+  border-radius: 16px;
 }
 
 .fs-desktop .fs-side {
@@ -1805,15 +1906,18 @@ onUnmounted(() => {
 .fs-desktop .fs-lrc {
   align-items: flex-start;
   text-align: left;
-  padding: 40px 12px;
+  padding: 40px 12px 48px;
+  margin-bottom: 18px;
 }
 
 .fs-desktop .fs-lrc-line {
-  font-size: 1.25rem;
+  font-size: clamp(18px, 2.2vw, 34px);
+  line-height: 1.6;
+  font-weight: 600;
 }
 
 .fs-desktop .fs-lrc-line.active {
-  font-size: 1.7rem;
+  color: #fff;
 }
 
 /* 桌面底部条：进度条在上，信息/控制/时间在下 */
@@ -1877,6 +1981,12 @@ onUnmounted(() => {
 .fs-desktop .fs-controls {
   justify-self: center;
   gap: 26px;
+}
+
+.fs-btn.on,
+.fs-side-btn.on,
+.fs-queuebtn.on {
+  color: var(--accent1);
 }
 
 .fs-btn.on {

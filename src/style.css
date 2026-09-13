@@ -19,6 +19,21 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 音乐卡与全屏播放器内不显示滚动条（列表/歌词仍可滚动） */
+.more .music .playlist-container,
+.more .music .lrc-container,
+.fs-lrc,
+.fs-queue {
+  scrollbar-width: none;
+}
+
+.more .music .playlist-container::-webkit-scrollbar,
+.more .music .lrc-container::-webkit-scrollbar,
+.fs-lrc::-webkit-scrollbar,
+.fs-queue::-webkit-scrollbar {
+  display: none;
+}
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
