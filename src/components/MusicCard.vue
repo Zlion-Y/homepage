@@ -202,8 +202,8 @@
                     </div>
                     <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
                   </div>
-                  <!-- v-if 而非 v-show：410 行队列不该在全屏打开（默认看歌词）时就建出来 -->
-                  <div v-if="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
+                  <!-- 首次点开队列才建 DOM（410 行渐进上屏），之后常驻只切显示：避免反复重建导致的闪烁 -->
+                  <div v-if="fsQueueBuilt" v-show="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
                     <div
                       v-for="(t, i) in fsQRows"
                       :key="i"
@@ -677,8 +677,11 @@ watch(lrcIndex, () => {
 watch(fsView, (v) => {
   if (v === "lyrics") nextTick(() => fsLrcFollow(true));
   else if (v === "queue") {
-    // 队列刚挂载：首屏先给 32 行并定位当前播放行，其余空闲补齐
-    fsQList.restart();
+    if (!fsQueueBuilt.value) {
+      // 首次点开：建 DOM，首屏先给 32 行并定位当前播放行，其余空闲补齐
+      fsQueueBuilt.value = true;
+      fsQList.restart();
+    }
     nextTick(() => scrollQueueToActive());
   }
 });
@@ -777,6 +780,7 @@ const plList = makeProgressor(playlist, 24, () => scrollPlaylistToActive());
 const plRows = plList.rows;
 const fsQList = makeProgressor(playlist, 32, () => scrollQueueToActive());
 const fsQRows = fsQList.rows;
+const fsQueueBuilt = ref(false); // 队列 DOM 是否已建（建过一次后只切显示）
 
 let isUserScrolling = false;
 let scrollTimeout = null;
@@ -1963,6 +1967,7 @@ onUnmounted(() => {
   position: absolute;
   inset: -12%;
   will-change: transform;
+  backface-visibility: hidden;
 }
 
 .fs-grad-1 {
@@ -1971,10 +1976,6 @@ onUnmounted(() => {
 
 .fs-grad-2 {
   animation: fsFlow2 62s ease-in-out infinite alternate;
-}
-
-.fs-bg-img {
-  animation: fsBreath 28s ease-in-out infinite alternate;
 }
 
 @keyframes fsFlow1 {
@@ -1995,19 +1996,9 @@ onUnmounted(() => {
   }
 }
 
-@keyframes fsBreath {
-  from {
-    transform: scale(1.06);
-  }
-  to {
-    transform: scale(1.16);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .fs-grad-1,
-  .fs-grad-2,
-  .fs-bg-img {
+  .fs-grad-2 {
     animation: none;
   }
 }
@@ -2163,6 +2154,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  contain: content; /* 同上：歌词重绘不牵动背景层 */
   /* 关闭滚动锚定：行高亮切换会改变行高，锚定补偿会把跟随位置越拖越远 */
   overflow-anchor: none;
   padding: 30px 8px;
@@ -2586,6 +2578,8 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* 绘制隔离：队列挂载/滚动只在自身范围内重绘，不牵动大面积背景动画层重栅格化 */
+  contain: content;
   display: flex;
   flex-direction: column;
   gap: 10px;
