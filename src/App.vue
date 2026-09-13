@@ -157,15 +157,17 @@ onMounted(() => {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 二级面板过渡 */
+/* 二级面板过渡：只做位移，绝不带 opacity。
+   与 .rise 同一个坑——Chromium 在 opacity 动画期间会暂停 backdrop-filter 渲染，
+   面板淡入的 0.35s 里卡片会一直"只透底没模糊"，等淡入结束模糊才补上（看着就是
+   毛玻璃慢半拍）。去掉透明度动画后，卡片一出现模糊就已经在位，与一级界面一致。 */
 .more-enter-active,
 .more-leave-active {
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  transition: transform 0.35s ease;
 }
 
 .more-enter-from,
 .more-leave-to {
-  opacity: 0;
   transform: translateY(24px);
 }
 

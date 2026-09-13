@@ -114,10 +114,16 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--glass);
+  /* 与面板卡片同一套毛玻璃参数：原来这个按钮只有半透明底色、没有模糊，
+     夹在一堆磨砂卡片里显得不是一套。will-change 同卡片——它是随面板动态挂载的，
+     不预提升会先画半透明底、下一帧模糊才到 */
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  will-change: backdrop-filter;
   color: var(--text-dim);
   font-size: 0.84rem;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease;
 }
 
 .back:hover {
