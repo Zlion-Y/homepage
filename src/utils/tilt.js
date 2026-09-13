@@ -17,8 +17,10 @@ export function applyTilt(delay = 1500) {
       el.style.transition =
         "transform 240ms cubic-bezier(0.22, 1, 0.36, 1), background 0.3s ease, border-color 0.3s ease";
     };
-    const setTilt = (x, y) => {
+    const setTilt = (clientX, clientY) => {
       const r = el.getBoundingClientRect();
+      const x = clientX - r.left; // 转为卡内相对坐标（client 坐标直接参与计算会放大旋转角）
+      const y = clientY - r.top;
       const cx = r.width / 2;
       const cy = r.height / 2;
       const maxRotate = 12;
