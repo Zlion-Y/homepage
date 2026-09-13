@@ -180,7 +180,7 @@
                     </div>
                     <div v-if="!lyrics.length" class="lrc-empty">暂无歌词</div>
                   </div>
-                  <div v-show="fsView === 'queue'" class="fs-queue">
+                  <div v-show="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
                     <div
                       v-for="(t, i) in playlist"
                       :key="i"
@@ -350,6 +350,7 @@ function openFs() {
   resolveFsCover();
   nextTick(() => {
     if (fsView.value === "lyrics") fsLrcFollow(true);
+    scrollQueueToActive();
   });
 }
 
@@ -416,6 +417,27 @@ function fsPickQueue(i) {
   playIndex(i);
   fsView.value = "lyrics";
 }
+
+// 列表滚动到当前播放行（小卡歌单 / 全屏队列）
+const fsQueueEl = ref(null);
+function scrollListToActive(container, activeEl) {
+  if (!container || !activeEl) return;
+  container.scrollTop = activeEl.offsetTop - container.clientHeight / 2 + activeEl.offsetHeight / 2;
+}
+function scrollPlaylistToActive() {
+  const row = plEl.value?.children?.[index.value];
+  scrollListToActive(plEl.value, row);
+}
+function scrollQueueToActive() {
+  const row = fsQueueEl.value?.children?.[index.value];
+  scrollListToActive(fsQueueEl.value, row);
+}
+watch(index, () => {
+  nextTick(() => {
+    scrollPlaylistToActive();
+    if (fsOpen.value && fsView.value === "queue") scrollQueueToActive();
+  });
+});
 
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
 // 500ms 后仍在原地就立即跳到目标位（真机亮屏时平滑正常生效）
@@ -561,6 +583,12 @@ async function fetchPlaylistAll() {
 // ── 歌单预载：页面一打开就开始拉，进二级面板时多半已就绪 ──
 // 缓存 key 绑定歌单 ID：配置改了歌单立即失效，不用清缓存/无痕
 const playlistCacheKey = `music_playlist_v2_${siteConfig.musicPlaylist || "default"}`;
+// 清理旧版无 ID 的遗留缓存（已不再读取，白占空间）
+try {
+  localStorage.removeItem("music_playlist_v2");
+} catch {
+  // 忽略
+}
 const playlistReady = (async () => {
   try {
     const cached = JSON.parse(localStorage.getItem(playlistCacheKey) || "null");
@@ -584,6 +612,15 @@ const playlistReady = (async () => {
 })();
 
 // ── Lyrics ───────────────────────────────────────────────
+// 歌词缓存：内存 + localStorage（按歌词地址），二次播放/切回秒出
+const lrcMem = new Map();
+function lrcCacheKey(url) {
+  return "lrc_" + url.slice(-64);
+}
+function applyLrcText(t, text) {
+  if (playlist.value[index.value] !== t) return; // 已切歌，丢弃过期歌词
+  lyrics.value = parseLRC(text);
+}
 function loadLyrics(t) {
   lyrics.value = [];
   lrcIndex.value = -1;
@@ -592,18 +629,68 @@ function loadLyrics(t) {
 
   const isLrcUrl = /^(https?:)?\/\//.test(t.lrc) || t.lrc.startsWith("/") || /\.(lrc|txt)(\?|#|$)/i.test(t.lrc);
 
-  if (isLrcUrl) {
-    fetch(t.lrc)
-      .then((r) => r.text())
-      .then((text) => {
-        // 已切歌则丢弃过期歌词
-        if (playlist.value[index.value] !== t) return;
-        lyrics.value = parseLRC(text);
-      })
-      .catch(() => (lyrics.value = []));
-  } else {
+  if (!isLrcUrl) {
     lyrics.value = parseLRC(t.lrc);
+    return;
   }
+
+  // 内存缓存命中：同步显示
+  const key = lrcCacheKey(t.lrc);
+  if (lrcMem.has(key)) {
+    applyLrcText(t, lrcMem.get(key));
+    return;
+  }
+  // localStorage 命中：同步显示并回填内存
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      lrcMem.set(key, cached);
+      applyLrcText(t, cached);
+      return;
+    }
+  } catch {
+    // 读取失败则走网络
+  }
+
+  fetch(t.lrc)
+    .then((r) => r.text())
+    .then((text) => {
+      if (text) {
+        lrcMem.set(key, text);
+        try {
+          localStorage.setItem(key, text);
+        } catch {
+          // 存储失败不影响展示
+        }
+      }
+      applyLrcText(t, text);
+    })
+    .catch(() => (lyrics.value = []));
+}
+
+// 后台预取下一首歌词，切歌时即刻可用
+let prefetching = false;
+function prefetchNextLyrics() {
+  if (prefetching || playlist.value.length < 2) return;
+  const next = playlist.value[(index.value + 1) % playlist.value.length];
+  if (!next || !next.lrc || !/^(https?:)?\/\//.test(next.lrc)) return;
+  const key = lrcCacheKey(next.lrc);
+  if (lrcMem.has(key) || localStorage.getItem(key)) return;
+  prefetching = true;
+  fetch(next.lrc)
+    .then((r) => r.text())
+    .then((text) => {
+      if (text) {
+        lrcMem.set(key, text);
+        try {
+          localStorage.setItem(key, text);
+        } catch {
+          // 忽略
+        }
+      }
+    })
+    .catch(() => {})
+    .finally(() => (prefetching = false));
 }
 
 function updateLrcHighlight(time) {
@@ -771,6 +858,7 @@ function loadAndPlay(i, autoPlay = true) {
   }
 
   loadLyrics(t);
+  prefetchNextLyrics();
   coverLoaded.value = false;
   currentTime.value = 0;
   duration.value = 0;
@@ -970,6 +1058,7 @@ onMounted(async () => {
     failedLoad();
   }
   loading.value = false;
+  nextTick(() => scrollPlaylistToActive());
 });
 
 function failedLoad() {
@@ -1368,6 +1457,7 @@ onUnmounted(() => {
 
 /* Playlist */
 .playlist-container {
+  position: relative; /* offsetTop 以容器为基准，定位当前行才准 */
   height: calc(100% - 8px); /* 填满抽屉槽位并在其内滚动 */
   overflow-y: auto;
   margin-top: 8px;
