@@ -15,6 +15,8 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* 关闭移动浏览器点按高亮：方块高亮盖在圆形按钮/玻璃卡片上非常突兀 */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
