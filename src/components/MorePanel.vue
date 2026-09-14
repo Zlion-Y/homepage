@@ -93,7 +93,9 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
    刻意不在父层写 filter：filter 会建立 backdrop root，可能影响卡片的 backdrop-filter 取景。 */
 .more::before {
   content: "";
-  position: absolute;
+  /* 手机上面板自身可滚（.more { overflow-y: auto }），absolute 会跟着内容一起滚走——
+     滚到下半屏就只剩面板底色、壁纸消失。改成 fixed 常驻视口，整屏都有背景。 */
+  position: fixed;
   inset: 0;
   z-index: -1;
   background-image: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), var(--bg-src, none);
