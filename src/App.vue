@@ -15,7 +15,10 @@
           @keydown.enter="enterPanel($event)"
         >
           <LogoBadge :size="58" />
-          <h1 class="site-name">{{ siteConfig.siteName }}</h1>
+          <h1 class="site-name">
+            <span class="sn-main">{{ siteNameParts[0] }}</span
+            ><span v-if="siteNameParts[1]" class="sn-suffix">{{ siteNameParts[1] }}</span>
+          </h1>
         </div>
         <GreetCard v-if="homeCards.greet" class="rise" style="--d: 0.18s" />
         <BlogCard v-if="homeCards.blog" class="rise" style="--d: 0.3s" />
@@ -47,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
 import { applyTilt } from "@/utils/tilt";
 import { firework, tip } from "@/utils/fx";
@@ -63,6 +66,14 @@ import ClockCard from "@/components/ClockCard.vue";
 import WeatherCard from "@/components/WeatherCard.vue";
 import SiteLinks from "@/components/SiteLinks.vue";
 import Footer from "@/components/Footer.vue";
+
+// 站名拆成「主名 + 后缀」两段渲染：主名大字、后缀小一号（`.top` 这种 TLD），
+// 配上手写体就是导航站常见的那种艺术字观感
+const siteNameParts = computed(() => {
+  const n = String(siteConfig.siteName || "").trim();
+  const i = n.indexOf(".");
+  return i > 0 ? [n.slice(0, i), n.slice(i)] : [n, ""];
+});
 
 const loading = ref(true);
 // 二级「探索更多」面板开关
@@ -241,12 +252,20 @@ onUnmounted(() => clearTimeout(returnTimer));
 
 .site-name {
   font-size: clamp(1.8rem, 3vw, 2.6rem);
-  font-weight: 800;
-  letter-spacing: 1px;
+  /* 手写体没有粗体字重，font-weight 交给浏览器合成会糊，这里用 normal */
+  font-weight: 400;
+  font-family: "Pacifico", system-ui, sans-serif;
+  letter-spacing: 0.5px;
   background: linear-gradient(120deg, #fff 30%, #a5b4fc 70%, #67e8f9);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* 后缀（.top 之类）小一号，与主名拉开层次 */
+.site-name .sn-suffix {
+  font-size: 0.62em;
+  letter-spacing: 0;
 }
 
 /* 右列：一言/时间 等宽，天气长卡横跨整行，下面是网站列表 */

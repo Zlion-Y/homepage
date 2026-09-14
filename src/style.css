@@ -1,3 +1,10 @@
+/* 站名的手写体（SIL OFL，见 public/font/README.md） */
+@font-face {
+  font-family: "Pacifico";
+  font-display: swap;
+  src: url("/font/Pacifico-Regular.ttf") format("truetype");
+}
+
 :root {
   --bg: #070b16;
   --glass: rgba(255, 255, 255, 0.06);
