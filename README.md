@@ -134,7 +134,7 @@
 
 ```js
 musicSource: "proxy",                       // 默认 "meting"
-musicProxy: "https://music-api.zlion.top",  // 你的代理地址，必须 https、不留结尾斜杠
+musicProxy: "https://music-api.zlion.top",  // 代理地址，必须 https、不留结尾斜杠，这里只做展示，请替换为自己的代理地址
 musicQuality: "320k",                       // 128k / 320k / flac / flac24bit
 ```
 
@@ -205,3 +205,7 @@ zlion-home/
 - 图标基于 [Lucide](https://lucide.dev/)（ISC License）
 - 一言 API：[hitokoto.cn](https://hitokoto.cn/)；今日诗词：[jinrishici.com](https://www.jinrishici.com/)
 - 天气 / 热榜 / 新闻等数据接口：[uapis.cn](https://uapis.cn/)、[60s API](https://github.com/vikiboss/60s)
+- 若AI参考了您的代码，在此一并致谢。
+
+## 说明
+- 整体项目均为vibe coding实现，若侵犯了您的权益请联系我删除，谢谢。
