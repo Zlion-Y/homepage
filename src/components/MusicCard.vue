@@ -1069,6 +1069,7 @@ function resetScrollTimeout() {
 // ── 自建音源代理（config.musicSource = "proxy"）─────────────
 // 只接管「解析播放直链」这一步：Metting 的候选链原样并行，代理解析出的直链
 // 参与探活竞速，晚到就留在候选链里当兜底。代理不中转音频流，最终仍是浏览器直连 CDN。
+let proxyWarned = false; // 代理失败只提示一次，避免每首歌都刷控制台
 function proxyEnabled() {
   return siteConfig.musicSource === "proxy" && !!siteConfig.musicProxy;
 }
@@ -1087,8 +1088,15 @@ async function resolveProxyUrl(t, ms = 3500) {
     }).then((r) => r.json());
     // 部分音源返回 http 直链，https 页面下会被浏览器拦掉，统一升到 https
     return String((res && res.url) || "").replace(/^http:\/\//i, "https://");
-  } catch {
-    return ""; // 代理不可用：静默退回 Meting 候选链
+  } catch (e) {
+    // 静默退回 Meting 候选链，但给一次控制台提示——最常见的失败原因是
+    // musicProxy 填了 http:// 地址，被浏览器当作 Mixed Content 拦掉
+    if (!proxyWarned) {
+      proxyWarned = true;
+      console.warn("[music] 自建音源代理请求失败，已退回 Meting：", e && e.message, "
+检查 musicProxy 是否为 https 地址（HTTPS 页面不能请求 http 资源）");
+    }
+    return "";
   } finally {
     clearTimeout(timer);
   }
