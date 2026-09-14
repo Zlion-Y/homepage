@@ -127,13 +127,17 @@
 [zlion-music-api](https://github.com/Zlion-Y/zlion-music-api)——单二进制 Go 程序，只做搜索与取流、
 **不中转音频流**（返回各平台 CDN 直链，浏览器直接拉），并能在服务端运行洛雪自定义音源脚本。
 
-部署好后在 `config.js` 里改两行即可切换：
+代理自带一个管理页（`/admin`），可以直接**上传洛雪音源脚本**，或**填一个远程脚本地址让它自动更新**，
+改完立即生效不用重启，细节见该仓库 README。部署好后在 `config.js` 里改两行即可切换：
 
 ```js
 musicSource: "proxy",                       // 默认 "meting"
-musicProxy: "https://music-api.zlion.top",  // 你的代理地址，不带结尾斜杠
+musicProxy: "https://music-api.zlion.top",  // 你的代理地址，必须 https、不留结尾斜杠
 musicQuality: "320k",                       // 128k / 320k / flac / flac24bit
 ```
+
+> ⚠️ 地址必须是 **https**：本站是 HTTPS 页面，浏览器会拦掉它去请求 `http://` 资源（Mixed Content），
+> 直接填 `http://IP:端口` 调不通，要在外面套一层 TLS（反向代理 + 证书）。
 
 切换后 Meting 候选链**依然并行保留**：代理解析出的直链参与可用性竞速，排在候选链第二位，
 当前源一挂立刻换过去；代理没部署或挂掉时，前端会静默退回 Meting，行为与原来完全一致。
