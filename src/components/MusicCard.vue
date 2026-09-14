@@ -1066,6 +1066,34 @@ function resetScrollTimeout() {
   }, 3000);
 }
 
+// ── 自建音源代理（config.musicSource = "proxy"）─────────────
+// 只接管「解析播放直链」这一步：Metting 的候选链原样并行，代理解析出的直链
+// 参与探活竞速，晚到就留在候选链里当兜底。代理不中转音频流，最终仍是浏览器直连 CDN。
+function proxyEnabled() {
+  return siteConfig.musicSource === "proxy" && !!siteConfig.musicProxy;
+}
+
+async function resolveProxyUrl(t, ms = 3500) {
+  if (!proxyEnabled()) return "";
+  const id = songIdOf(t);
+  if (!id) return "";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const base = String(siteConfig.musicProxy).replace(/\/+$/, "");
+    const q = encodeURIComponent(siteConfig.musicQuality || "320k");
+    const res = await fetch(`${base}/api/url?id=${encodeURIComponent(id)}&source=wy&quality=${q}`, {
+      signal: ctrl.signal,
+    }).then((r) => r.json());
+    // 部分音源返回 http 直链，https 页面下会被浏览器拦掉，统一升到 https
+    return String((res && res.url) || "").replace(/^http:\/\//i, "https://");
+  } catch {
+    return ""; // 代理不可用：静默退回 Meting 候选链
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Playback ─────────────────────────────────────────────
 // 实现方式照搬博客音乐播放器（github.com/CuteLeaf/Firefly 的 MusicManager）并适配 Vue：
 // loadVersion 丢弃过期 play 回调 + AbortError 静默 + 同曲多源降级 + 全败 2s 延迟跳曲
@@ -1134,7 +1162,16 @@ function probeAudio(url, ms) {
   });
 }
 
-async function playWithProbe(cands, ver) {
+// 代理直链插到候选链第 2 位：第一顺位仍是在播/预载的源，它一挂立刻换代理直链，
+// 而不是先挨个试完 Meting 的备源（每个都要等看门狗超时）
+function insertProxyUrl(u, ver) {
+  if (!u || ver !== loadVersion || trackUrls.includes(u)) return;
+  if (trackUrls.length > 1) trackUrls.splice(1, 0, u);
+  else trackUrls.push(u);
+}
+
+async function playWithProbe(cands, ver, latePromise) {
+  let lateUrl = "";
   const winner = await new Promise((resolve) => {
     let done = false;
     const finish = (u) => {
@@ -1144,6 +1181,14 @@ async function playWithProbe(cands, ver) {
       }
     };
     cands.forEach((u) => probeAudio(u, 4000).then((ok) => ok && finish(u)));
+    // 代理直链是异步解析的：到得早就一起竞速，到得晚就当兜底
+    if (latePromise) {
+      latePromise.then((u) => {
+        if (!u) return;
+        lateUrl = u;
+        probeAudio(u, 4000).then((ok) => ok && finish(u));
+      });
+    }
     setTimeout(() => finish(null), 4100);
   });
   if (ver !== loadVersion || !wantPlay) return; // 已切歌或用户已暂停（探活期间点暂停）
@@ -1151,6 +1196,9 @@ async function playWithProbe(cands, ver) {
     trackUrls = [winner, ...cands.filter((u) => u !== winner)];
     trackUrlIdx = 0;
   }
+  // 迟到的代理直链也要进候选链（竞速时它可能还没解析完）
+  if (lateUrl) insertProxyUrl(lateUrl, ver);
+  if (latePromise) latePromise.then((u) => insertProxyUrl(u, ver));
   playCurrentUrl(true, ver);
 }
 
@@ -1184,6 +1232,9 @@ function loadAndPlay(i, autoPlay = true) {
     });
   }
 
+  // 自建代理：与 Meting 探活并行解析直链（id 取自音源链接里的网易歌曲 id）
+  const latePromise = proxyEnabled() ? resolveProxyUrl(t) : null;
+
   loadLyrics(t);
   prefetchNextLyrics();
   coverLoaded.value = false;
@@ -1191,9 +1242,11 @@ function loadAndPlay(i, autoPlay = true) {
   currentTime.value = 0;
   duration.value = 0;
   if (autoPlay) {
-    playWithProbe(trackUrls.slice(), ver);
+    playWithProbe(trackUrls.slice(), ver, latePromise);
   } else {
     playCurrentUrl(false, ver);
+    // 预载不发声：代理直链排进候选链，预载源一挂就能顶上
+    if (latePromise) latePromise.then((u) => insertProxyUrl(u, ver));
   }
 }
 
