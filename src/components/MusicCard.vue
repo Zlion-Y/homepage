@@ -245,8 +245,7 @@
                 <div class="p-thumb" :style="{ left: pct + '%' }"></div>
               </div>
               <div class="fs-times">
-                <span>{{ fmt(currentTime) }}</span>
-                <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
+                <span>{{ fmt(currentTime) }} / {{ fmt(duration) }}</span>
               </div>
 
               <div class="fs-bottom">
@@ -273,8 +272,7 @@
                   </button>
                 </div>
                 <div class="fs-time">
-                  <span>{{ fmt(currentTime) }}</span>
-                  <span>-{{ fmt(Math.max(0, duration - currentTime)) }}</span>
+                  <span>{{ fmt(currentTime) }} / {{ fmt(duration) }}</span>
                 </div>
               </div>
             </div>
@@ -2287,13 +2285,20 @@ onUnmounted(() => {
   top: 50%;
   /* 覆盖主卡 .p-thumb 的 margin 负值居中：这里用 translate 居中，叠加会上浮 */
   margin: 0;
-  transform: translate(-50%, -50%);
+  /* 默认藏起来（主卡的 scale(0) 会被上面的 translate 覆盖，所以要显式再乘一次），
+     鼠标移到进度条上、准备拖拽时才浮现 */
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.18s ease, left 0.1s linear;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.fs-progress:hover .p-thumb {
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .fs-times {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-top: 6px;
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.55);
