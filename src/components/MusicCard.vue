@@ -1066,17 +1066,28 @@ function resetScrollTimeout() {
   }, 3000);
 }
 
-// ── 自建音源代理（config.musicSource = "proxy"）─────────────
-// 只接管「解析播放直链」这一步：Metting 的候选链原样并行，代理解析出的直链
-// 参与探活竞速，晚到就留在候选链里当兜底。代理不中转音频流，最终仍是浏览器直连 CDN。
+// ── 播放直链来源（config.musicSource）────────────────────────
+//   proxy ：**代理优先**——先拿自建代理的直链当第一顺位，Meting 整条链原样排在后面；
+//           代理解析不到、或代理直链播放失败，就顺着降级链落到 Meting。
+//   meting：**只走 Meting**，完全不请求代理。
+// 代理不中转音频流，最终仍是浏览器直连 CDN。
 let proxyWarned = false; // 代理失败只提示一次，避免每首歌都刷控制台
 function proxyEnabled() {
   return siteConfig.musicSource === "proxy" && !!siteConfig.musicProxy;
 }
 
-async function resolveProxyUrl(t, ms = 3500) {
+// 同一首歌的解析结果记一小会儿：换歌来回切时不用反复问代理（代理侧本来也有 15 分钟缓存）
+const proxyMemo = new Map();
+const PROXY_MEMO_MS = 10 * 60 * 1000;
+
+async function resolveProxyUrl(t, ms = 3000) {
   if (!proxyEnabled()) return "";
   const id = songIdOf(t);
+  const memoKey = id || t.name || "";
+  if (memoKey) {
+    const hit = proxyMemo.get(memoKey);
+    if (hit && Date.now() - hit.at < PROXY_MEMO_MS) return hit.url;
+  }
   if (!id) return "";
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
@@ -1087,7 +1098,9 @@ async function resolveProxyUrl(t, ms = 3500) {
       signal: ctrl.signal,
     }).then((r) => r.json());
     // 部分音源返回 http 直链，https 页面下会被浏览器拦掉，统一升到 https
-    return String((res && res.url) || "").replace(/^http:\/\//i, "https://");
+    const url = String((res && res.url) || "").replace(/^http:\/\//i, "https://");
+    if (memoKey && url) proxyMemo.set(memoKey, { url, at: Date.now() });
+    return url;
   } catch (e) {
     // 静默退回 Meting 候选链，但给一次控制台提示——最常见的失败原因是
     // musicProxy 填了 http:// 地址，被浏览器当作 Mixed Content 拦掉
@@ -1169,16 +1182,7 @@ function probeAudio(url, ms) {
   });
 }
 
-// 代理直链插到候选链第 2 位：第一顺位仍是在播/预载的源，它一挂立刻换代理直链，
-// 而不是先挨个试完 Meting 的备源（每个都要等看门狗超时）
-function insertProxyUrl(u, ver) {
-  if (!u || ver !== loadVersion || trackUrls.includes(u)) return;
-  if (trackUrls.length > 1) trackUrls.splice(1, 0, u);
-  else trackUrls.push(u);
-}
-
-async function playWithProbe(cands, ver, latePromise) {
-  let lateUrl = "";
+async function playWithProbe(cands, ver) {
   const winner = await new Promise((resolve) => {
     let done = false;
     const finish = (u) => {
@@ -1188,14 +1192,6 @@ async function playWithProbe(cands, ver, latePromise) {
       }
     };
     cands.forEach((u) => probeAudio(u, 4000).then((ok) => ok && finish(u)));
-    // 代理直链是异步解析的：到得早就一起竞速，到得晚就当兜底
-    if (latePromise) {
-      latePromise.then((u) => {
-        if (!u) return;
-        lateUrl = u;
-        probeAudio(u, 4000).then((ok) => ok && finish(u));
-      });
-    }
     setTimeout(() => finish(null), 4100);
   });
   if (ver !== loadVersion || !wantPlay) return; // 已切歌或用户已暂停（探活期间点暂停）
@@ -1203,9 +1199,6 @@ async function playWithProbe(cands, ver, latePromise) {
     trackUrls = [winner, ...cands.filter((u) => u !== winner)];
     trackUrlIdx = 0;
   }
-  // 迟到的代理直链也要进候选链（竞速时它可能还没解析完）
-  if (lateUrl) insertProxyUrl(lateUrl, ver);
-  if (latePromise) latePromise.then((u) => insertProxyUrl(u, ver));
   playCurrentUrl(true, ver);
 }
 
@@ -1222,9 +1215,41 @@ function loadAndPlay(i, autoPlay = true) {
     errorSkipTimer = null;
   }
 
-  // 候选源：歌单竞速的胜出源优先（当前网络下它最可达），其余源殿后
-  trackUrls = [t.url];
-  trackUrlIdx = 0;
+  // Meting 候选链：歌单竞速的胜出源优先（当前网络下它最可达），其余源殿后。
+  // 代理模式下它同时扮演两个角色——代理没结果时的兜底，以及代理直链失效后的降级链。
+  const meting = metingCandidates(t);
+
+  loadLyrics(t);
+  prefetchNextLyrics();
+  coverLoaded.value = false;
+  syncBgShown();
+  currentTime.value = 0;
+  duration.value = 0;
+
+  const begin = (list) => {
+    if (ver !== loadVersion) return; // 解析期间已切歌
+    trackUrls = list;
+    trackUrlIdx = 0;
+    if (autoPlay) playWithProbe(list.slice(), ver);
+    else playCurrentUrl(false, ver);
+  };
+
+  if (!proxyEnabled()) {
+    // 只走 Meting：完全不碰代理
+    begin(meting);
+    return;
+  }
+  // 代理优先：等代理给出直链（带超时），拿到就放在第一顺位，Meting 整条链原样排在后面；
+  // 代理没结果就直接走 Meting。注意这里要串行等待——如果让 Meting 先探活，
+  // 它对 VIP 歌返回的"能播的 30 秒试听片段"会赢下竞速，完整直链就永远轮不到了。
+  resolveProxyUrl(t).then((u) => {
+    begin(u ? [u, ...meting.filter((x) => x !== u)] : meting.slice());
+  });
+}
+
+// 按 Meting 接口拼候选链（主源 + 各备源的单曲解析）
+function metingCandidates(t) {
+  const out = [t.url];
   const mid = t.url.match(/[?&]id=([^&]+)/);
   const mserver = t.url.match(/[?&]server=([^&]+)/);
   if (mid && mserver) {
@@ -1235,26 +1260,10 @@ function loadAndPlay(i, autoPlay = true) {
         .replace(/type=[^&]+/, "type=url")
         .replace(/id=[^&]+/, "id=" + mid[1])
         .replace(/:r/, String(Math.random()));
-      if (!trackUrls.includes(fu)) trackUrls.push(fu);
+      if (!out.includes(fu)) out.push(fu);
     });
   }
-
-  // 自建代理：与 Meting 探活并行解析直链（id 取自音源链接里的网易歌曲 id）
-  const latePromise = proxyEnabled() ? resolveProxyUrl(t) : null;
-
-  loadLyrics(t);
-  prefetchNextLyrics();
-  coverLoaded.value = false;
-  syncBgShown();
-  currentTime.value = 0;
-  duration.value = 0;
-  if (autoPlay) {
-    playWithProbe(trackUrls.slice(), ver, latePromise);
-  } else {
-    playCurrentUrl(false, ver);
-    // 预载不发声：代理直链排进候选链，预载源一挂就能顶上
-    if (latePromise) latePromise.then((u) => insertProxyUrl(u, ver));
-  }
+  return out.filter(Boolean);
 }
 
 let lastErrAt = 0; // 同一个错误的 error 事件与 play() reject 可能双触发，300ms 内去重
