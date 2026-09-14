@@ -413,19 +413,6 @@ function syncBgShown() {
   });
 }
 
-// 全屏状态记到本地：刷新后仍停在全屏播放器，而不是退回二级界面
-const FS_KEY = "zlion_fs";
-const FS_VIEW_KEY = "zlion_fs_view";
-
-function saveFsState() {
-  try {
-    localStorage.setItem(FS_KEY, fsOpen.value ? "1" : "0");
-    localStorage.setItem(FS_VIEW_KEY, fsView.value);
-  } catch {
-    // 隐私模式下写入失败不影响功能
-  }
-}
-
 function openFs() {
   fsOpen.value = true;
   fsDesktop.value = window.matchMedia("(min-width: 980px)").matches;
@@ -435,7 +422,6 @@ function openFs() {
   resolveFsCover();
   syncBgShown();
   fsQList.restart(); // 打开全屏就开始后台渐进铺队列，点列表时已就绪
-  saveFsState();
   nextTick(() => {
     if (fsView.value === "lyrics") fsLrcFollow(true);
   });
@@ -443,7 +429,6 @@ function openFs() {
 
 function closeFs() {
   fsOpen.value = false;
-  saveFsState();
   document.body.style.overflow = fsPrevBodyOverflow;
 }
 
@@ -612,7 +597,6 @@ function fsCoverLeave() {
 
 // 全屏视图切换：歌词 ⇄ 播放列表（两端一致）
 function fsToggleView(v) {
-  nextTick(saveFsState);
   fsView.value = fsView.value === v ? "lyrics" : v;
 }
 
@@ -1083,69 +1067,50 @@ function resetScrollTimeout() {
 }
 
 // ── 播放直链来源（config.musicSource）────────────────────────
-//   proxy ：**代理优先**——先拿自建代理的直链当第一顺位，Meting 整条链原样排在后面；
-//           代理解析不到、或代理直链播放失败，就顺着降级链落到 Meting。
-//   meting：**只走 Meting**，完全不请求代理。
-// 代理不中转音频流，最终仍是浏览器直连 CDN。
-let proxyWarned = false; // 代理失败只提示一次，避免每首歌都刷控制台
+//   meting（默认）：只走公共 Meting 接口，开箱即用。
+//   proxy ：走本仓库自带的 serverless 解析（同源 /api/url，跟主页一起部署在 Vercel，
+//           服务端跑洛雪音源脚本并校验直链真能播）——解析出的直链当第一顺位，
+//           Meting 整条链排在后面；解析不到或直链播放失败就顺着降级链落到 Meting。
+// 解析只返回直链，音频始终是浏览器直连 CDN。
+let proxyWarned = false; // 解析失败只提示一次，避免每首歌都刷控制台
 function proxyEnabled() {
   return siteConfig.musicSource === "proxy";
 }
 
-// 直链接口可能有多个：外部自建代理（config.musicProxy）+ 同源内置函数（/api/url）。
-// 两个并行问、谁先给出直链用谁——内置的跑在 Vercel 机房，实测拿不到部分国内曲目，
-// 自建代理在国内家宽反而稳；并行对冲正好互补，也不用二选一。
-function proxyEndpoints() {
-  const list = [];
-  const base = String(siteConfig.musicProxy || "").replace(/\/+$/, "");
-  if (base) list.push(base + "/api/url");
-  if (siteConfig.musicBuiltin !== false) list.push("/api/url");
-  return list;
-}
-
-// 同一首歌的解析结果记一小会儿：换歌来回切时不用反复问代理（代理侧本来也有 15 分钟缓存）
+// 同一首歌的解析结果记一小会儿：换歌来回切时不用反复问（服务端本来也有 15 分钟 CDN 缓存）
 const proxyMemo = new Map();
 const PROXY_MEMO_MS = 10 * 60 * 1000;
 
-async function resolveProxyUrl(t, ms = 3000) {
+// 超时给 5 秒：函数冷启动时要装载全部音源脚本（实测约 1 秒）再解析，
+// 3 秒会在冷启动那次超时、白白退回 Meting。解析发生在预载阶段，用户点播放前通常已就绪。
+async function resolveProxyUrl(t, ms = 5000) {
   if (!proxyEnabled()) return "";
   const id = songIdOf(t);
   if (!id) return "";
-  const memoKey = id;
-  const hit = proxyMemo.get(memoKey);
+  const hit = proxyMemo.get(id);
   if (hit && Date.now() - hit.at < PROXY_MEMO_MS) return hit.url;
 
-  const q = encodeURIComponent(siteConfig.musicQuality || "320k");
-  const query = `id=${encodeURIComponent(id)}&source=wy&quality=${q}`;
-  const ask = async (endpoint) => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms);
-    try {
-      const res = await fetch(`${endpoint}?${query}`, { signal: ctrl.signal }).then((r) => r.json());
-      // 部分音源返回 http 直链，https 页面下会被浏览器拦掉，统一升到 https
-      const url = String((res && res.url) || "").replace(/^http:\/\//i, "https://");
-      if (!url) throw new Error((res && (res.msg || res.error)) || "没有直链");
-      return url;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  const endpoints = proxyEndpoints();
-  if (!endpoints.length) return "";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
   try {
-    // 并行对冲：谁先给出可用直链用谁（只有一个来源时就是普通请求）
-    const url = await Promise.any(endpoints.map(ask));
-    proxyMemo.set(memoKey, { url, at: Date.now() });
+    const q = encodeURIComponent(siteConfig.musicQuality || "320k");
+    const res = await fetch(`/api/url?id=${encodeURIComponent(id)}&source=wy&quality=${q}`, {
+      signal: ctrl.signal,
+    }).then((r) => r.json());
+    // 部分音源返回 http 直链，https 页面下会被浏览器拦掉，统一升到 https
+    const url = String((res && res.url) || "").replace(/^http:\/\//i, "https://");
+    if (!url) throw new Error((res && (res.msg || res.error)) || "没有直链");
+    proxyMemo.set(id, { url, at: Date.now() });
     return url;
   } catch (e) {
-    // 静默退回 Meting。提示只打一次，且把两个来源各自的失败原因都带上，便于排查
+    // 静默退回 Meting 候选链，提示只打一次：多半是 /api/url 没部署成功或音源全失效
     if (!proxyWarned) {
       proxyWarned = true;
-      const why = (e && e.errors ? e.errors : [e]).map((x) => (x && x.message) || String(x)).join(" / ");
-      console.warn("[music] 音源解析失败，已退回 Meting：", why, "（同源看 /api/health；外部代理确认地址是 https）");
+      console.warn("[music] 音源解析失败，已退回 Meting：", e && e.message, "（打开 /api/health 看音源装载情况）");
     }
     return "";
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -1256,29 +1221,46 @@ function loadAndPlay(i, autoPlay = true) {
 
   loadLyrics(t);
   prefetchNextLyrics();
+  // 顺手把下一首的直链也解析掉（延迟一点发起，别和当前这首抢）：切歌时不必再等冷启动
+  if (proxyEnabled()) {
+    const nx = playlist.value[(i + 1) % playlist.value.length];
+    if (nx && nx !== t) {
+      setTimeout(() => {
+        if (proxyEnabled()) resolveProxyUrl(nx, 6000);
+      }, 1500);
+    }
+  }
   coverLoaded.value = false;
   syncBgShown();
   currentTime.value = 0;
   duration.value = 0;
 
-  const begin = (list) => {
+  // race=true：多个候选用探针竞速挑最快的（Meting 那条链内部这么用）；
+  // race=false：直接播第一顺位（代理直链已经服务端校验过，不需要也不应该再和 Meting 抢）
+  const begin = (list, race = true) => {
     if (ver !== loadVersion) return; // 解析期间已切歌
     trackUrls = list;
     trackUrlIdx = 0;
-    if (autoPlay) playWithProbe(list.slice(), ver);
-    else playCurrentUrl(false, ver);
+    if (!autoPlay) playCurrentUrl(false, ver);
+    else if (race) playWithProbe(list.slice(), ver);
+    else playCurrentUrl(true, ver);
   };
 
   if (!proxyEnabled()) {
-    // 只走 Meting：完全不碰代理
+    // 只走 Meting：完全不碰代理，候选链内部竞速
     begin(meting);
     return;
   }
-  // 代理优先：等代理给出直链（带超时），拿到就放在第一顺位，Meting 整条链原样排在后面；
-  // 代理没结果就直接走 Meting。注意这里要串行等待——如果让 Meting 先探活，
-  // 它对 VIP 歌返回的"能播的 30 秒试听片段"会赢下竞速，完整直链就永远轮不到了。
+  // 代理优先：等代理解析出直链，**拿到就直接播**，不把 Meting 拉进来一起竞速——
+  // Meting 对 VIP 曲返回的"能播的 30 秒试听片段"会抢下竞速、让完整直链永远用不上。
+  // Meting 整条链只作为降级：代理直链播放失败（error/看门狗）时，降级链才轮到它，
+  // 也就是说「解析出的直链全部失效」之后才会切回 Meting。
   resolveProxyUrl(t).then((u) => {
-    begin(u ? [u, ...meting.filter((x) => x !== u)] : meting.slice());
+    if (!u) {
+      begin(meting); // 压根没解析到（超时/音源全失败）→ 直接走 Meting
+      return;
+    }
+    begin([u, ...meting.filter((x) => x !== u)], false);
   });
 }
 
@@ -1484,16 +1466,6 @@ onMounted(async () => {
       scheduleCoverUpgrade();
       // 随机预载一首（不自动播），避免每次打开都是同一首
       loadAndPlay(Math.floor(Math.random() * playlist.value.length), false);
-      // 刷新前停在全屏播放器的话，这里再打开一次（浏览器不允许无手势自动出声，所以是暂停态）
-      try {
-        if (localStorage.getItem(FS_KEY) === "1") {
-          const v = localStorage.getItem(FS_VIEW_KEY);
-          openFs();
-          if (v === "queue" || v === "cover" || v === "lyrics") fsView.value = v;
-        }
-      } catch {
-        // 忽略
-      }
     } else {
       failedLoad();
     }

@@ -65,20 +65,15 @@ export const siteConfig = {
   githubUser: "",
   // 网易云音乐歌单 ID（音乐播放卡），从歌单页地址栏 playlist?id=xxx 获取
   musicPlaylist: "3778678",
-  // ── 播放直链来源（只与"洛雪音源"有关的三项设置）────────────────────
-  // "meting"（默认）：走公共 Meting 接口，开箱即用，不依赖任何额外部署。
-  // "proxy"：走本仓库自带的 serverless 解析（api/ + lib/，跟主页一起部署在 Vercel，
-  //          在 sources/ 里放洛雪自定义源脚本，或配 SOURCE_URLS 指向在线脚本）。
-  //          前端调**同源**的 /api/url，不需要额外域名、证书与 CORS 配置；
-  //          解析不到时会自动降级回 Meting。
+  // ── 播放直链来源 ────────────────────────────────
+  //   "meting"（默认）：走公共 Meting 接口，开箱即用，不依赖任何额外部署。
+  //   "proxy"：走本仓库自带的 serverless 解析（api/ + lib/，跟主页一起部署在 Vercel）——
+  //            在 sources/ 里放洛雪自定义源脚本，或配 SOURCE_URLS 指向在线脚本；
+  //            前端调同源的 /api/url，不需要额外域名/证书/CORS。
+  //            解析出的直链会直接播放（服务端已校验可播），它失效后才降级回 Meting。
   musicSource: "meting",
   // 音质：128k / 320k / flac / flac24bit
   musicQuality: "320k",
-  // 极少数情况下想用别处的解析服务：填它的地址（必须 https，不要结尾斜杠），
-  // 与自带的同源解析**并行对冲**、谁先给出直链用谁；留空 = 只用同源解析。
-  musicProxy: "",
-  // 是否启用同源的 serverless 解析；false = 完全不请求 /api/url
-  musicBuiltin: true,
   // 站点监控卡（monitor）：检测各站点是否可访问（访客浏览器直连探测，
   // 显示连通状态与响应耗时，60 秒自动刷新）。url 需带 https://
   siteMonitors: [
