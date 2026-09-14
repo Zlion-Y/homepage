@@ -61,7 +61,7 @@ export const siteConfig = {
   // GitHub 用户名（GitHub 卡展示 Followers / Repos 数据；不把 github 加进 panelCards 就不显示）
   githubUser: "Zlion-Y",
   // 网易云音乐歌单 ID（音乐播放卡），从歌单页地址栏 playlist?id=xxx 获取
-  musicPlaylist: "12881639195",
+  musicPlaylist: "3778678",
   // 播放直链来源：meting=公共 Meting 接口（默认，开箱即用）；
   // proxy=自建代理（https://github.com/Zlion-Y/zlion-music-api）解析直链——代理里可以
   //       上传多个洛雪音源脚本、自动更新并做并行体检，VIP/版权受限曲目也能出流；
