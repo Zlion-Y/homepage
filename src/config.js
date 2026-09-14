@@ -63,9 +63,9 @@ export const siteConfig = {
   // 网易云音乐歌单 ID（音乐播放卡），从歌单页地址栏 playlist?id=xxx 获取
   musicPlaylist: "12881639195",
   // 播放直链来源：meting=公共 Meting 接口（默认，开箱即用）；
-  // proxy=自建代理（github.com/Zlion-Y/zlion-music-api）解析直链——代理里可以上传
-  //       洛雪音源脚本并自动更新，VIP/版权受限曲目也能出流；代理不可用时会自动
-  //       退回 Meting 候选链，所以填错地址也不影响播放。
+  // proxy=自建代理（https://github.com/Zlion-Y/zlion-music-api）解析直链——代理里可以
+  //       上传多个洛雪音源脚本、自动更新并做并行体检，VIP/版权受限曲目也能出流；
+  //       代理不可用时会自动退回 Meting 候选链，所以填错地址也不影响播放。
   // 部署好代理后：musicSource 改成 "proxy"，musicProxy 填代理地址（必须 https，不留结尾斜杠）
   musicSource: "proxy",
   // 自建音乐代理地址（musicSource 为 proxy 时生效），不要带结尾斜杠
