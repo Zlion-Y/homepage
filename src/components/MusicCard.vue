@@ -1097,7 +1097,9 @@ function proxyEnabled() {
 const proxyMemo = new Map();
 const PROXY_MEMO_MS = 10 * 60 * 1000;
 
-async function resolveProxyUrl(t, ms = 3000) {
+// 超时给 5 秒：函数冷启动时要装载全部音源脚本（实测约 1 秒）再解析，
+// 3 秒会在冷启动那次超时、白白退回 Meting。解析发生在预载阶段，用户点播放前通常已就绪。
+async function resolveProxyUrl(t, ms = 5000) {
   if (!proxyEnabled()) return "";
   const id = songIdOf(t);
   if (!id) return "";
@@ -1235,6 +1237,15 @@ function loadAndPlay(i, autoPlay = true) {
 
   loadLyrics(t);
   prefetchNextLyrics();
+  // 顺手把下一首的直链也解析掉（延迟一点发起，别和当前这首抢）：切歌时不必再等冷启动
+  if (proxyEnabled()) {
+    const nx = playlist.value[(i + 1) % playlist.value.length];
+    if (nx && nx !== t) {
+      setTimeout(() => {
+        if (proxyEnabled()) resolveProxyUrl(nx, 6000);
+      }, 1500);
+    }
+  }
   coverLoaded.value = false;
   syncBgShown();
   currentTime.value = 0;
