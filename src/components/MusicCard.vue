@@ -1235,24 +1235,32 @@ function loadAndPlay(i, autoPlay = true) {
   currentTime.value = 0;
   duration.value = 0;
 
-  const begin = (list) => {
+  // race=true：多个候选用探针竞速挑最快的（Meting 那条链内部这么用）；
+  // race=false：直接播第一顺位（代理直链已经服务端校验过，不需要也不应该再和 Meting 抢）
+  const begin = (list, race = true) => {
     if (ver !== loadVersion) return; // 解析期间已切歌
     trackUrls = list;
     trackUrlIdx = 0;
-    if (autoPlay) playWithProbe(list.slice(), ver);
-    else playCurrentUrl(false, ver);
+    if (!autoPlay) playCurrentUrl(false, ver);
+    else if (race) playWithProbe(list.slice(), ver);
+    else playCurrentUrl(true, ver);
   };
 
   if (!proxyEnabled()) {
-    // 只走 Meting：完全不碰代理
+    // 只走 Meting：完全不碰代理，候选链内部竞速
     begin(meting);
     return;
   }
-  // 代理优先：等代理给出直链（带超时），拿到就放在第一顺位，Meting 整条链原样排在后面；
-  // 代理没结果就直接走 Meting。注意这里要串行等待——如果让 Meting 先探活，
-  // 它对 VIP 歌返回的"能播的 30 秒试听片段"会赢下竞速，完整直链就永远轮不到了。
+  // 代理优先：等代理解析出直链，**拿到就直接播**，不把 Meting 拉进来一起竞速——
+  // Meting 对 VIP 曲返回的"能播的 30 秒试听片段"会抢下竞速、让完整直链永远用不上。
+  // Meting 整条链只作为降级：代理直链播放失败（error/看门狗）时，降级链才轮到它，
+  // 也就是说「解析出的直链全部失效」之后才会切回 Meting。
   resolveProxyUrl(t).then((u) => {
-    begin(u ? [u, ...meting.filter((x) => x !== u)] : meting.slice());
+    if (!u) {
+      begin(meting); // 压根没解析到（超时/音源全失败）→ 直接走 Meting
+      return;
+    }
+    begin([u, ...meting.filter((x) => x !== u)], false);
   });
 }
 
