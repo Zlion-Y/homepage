@@ -15,9 +15,9 @@ export const siteConfig = {
   desc: "欢迎来到我的个人主页，这里收录了我的博客与资源站。",
   // 打字机轮换标语：填多项则循环打字展示；只保留一项或删掉此项则固定显示 desc
   motto: [
+    "记录、分享、创造。",
     "欢迎来到我的个人主页，这里收录了我的博客与资源站。",
     "把折腾当成生活方式。",
-    "记录、分享、创造。",
   ],
   // 建站日期（页脚显示「本站已运行 N 天」）
   siteStart: "2026-09-12",
@@ -78,6 +78,7 @@ export const siteConfig = {
     { name: "主页", url: "https://www.zlion.top/" },
     { name: "博客", url: "https://blog.zlion.top/" },
     { name: "资源站", url: "https://alist.zlion.top/" },
+    { name: "音乐接口", url: "https://home-music.zlion.top:446//" },
   ],
   // 热榜平台与顺序（hotlist 卡），可用 key：
   //   weibo 微博 / bilibili B站 / v2ex V2EX / ithome IT之家 / hellogithub HelloGitHub
