@@ -67,7 +67,7 @@ export const siteConfig = {
   //       上传多个洛雪音源脚本、自动更新并做并行体检，VIP/版权受限曲目也能出流；
   //       代理不可用时会自动退回 Meting 候选链，所以填错地址也不影响播放。
   // 部署好代理后：musicSource 改成 "proxy"，musicProxy 填代理地址（必须 https，不留结尾斜杠）
-  musicSource: "meting",
+  musicSource: "proxy",
   // 自建音乐代理地址（musicSource 为 proxy 时生效），不要带结尾斜杠
   musicProxy: "https://home-music.zlion.top:446",
   // 请求代理时使用的音质：128k / 320k / flac / flac24bit
