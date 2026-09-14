@@ -73,12 +73,12 @@ export const siteConfig = {
   // musicProxy 留空 = 用同源内置函数（/api/url，随主页一起部署在 Vercel，无需额外后端）；
   // 填地址 = 用外部自建代理（自建版是 Go 单二进制：https://github.com/Zlion-Y/zlion-music-api）
   // 注意：填外部地址时必须是 https（https 页面加载 http 资源会被浏览器拦掉）
-  // musicBuiltin：是否也用同源内置函数（/api/url，随本仓库部署在 Vercel）。
-  // 两个来源会**并行对冲**，谁先给出直链用谁；关掉它就只走 musicProxy。
+  // musicBuiltin：同源内置函数（/api/url，随本仓库一起部署在 Vercel）——现在只用它。
+  // 想加外部自建代理做兜底：把 musicProxy 填上地址即可，两个来源会并行对冲、谁先成功用谁。
   musicBuiltin: true,
   musicSource: "proxy",
   // 自建音乐代理地址（musicSource 为 proxy 时生效），不要带结尾斜杠
-  musicProxy: "https://home-music.zlion.top:446",
+  musicProxy: "",
   // 请求代理时使用的音质：128k / 320k / flac / flac24bit
   musicQuality: "320k",
   // 站点监控卡（monitor）：检测各站点是否可访问（访客浏览器直连探测，
