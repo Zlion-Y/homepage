@@ -69,9 +69,6 @@ const loading = ref(true);
 const showMore = ref(false);
 // 面板是否已经挂载过：第一次打开才建 DOM，之后常驻（切显示），保证里面的音乐卡不被销毁
 const panelBuilt = ref(false);
-// 视图与滚动位置记到本地，刷新后回到刷新前的界面
-const VIEW_KEY = "zlion_view";
-const SCROLL_KEY = "zlion_scroll";
 // 返回一级时给主页内容补一次浮起动画（见样式里的 .panel-return）
 const returning = ref(false);
 let returnTimer = null;
@@ -128,11 +125,6 @@ function enterPanel(ev) {
 watch(showMore, (v) => {
   document.body.style.overflow = v ? "hidden" : "";
   if (v) panelBuilt.value = true;
-  try {
-    localStorage.setItem(VIEW_KEY, v ? "panel" : "home");
-  } catch {
-    // 隐私模式下写入失败，不影响功能
-  }
   if (!v) {
     returning.value = true;
     clearTimeout(returnTimer);
@@ -141,45 +133,12 @@ watch(showMore, (v) => {
 });
 
 onMounted(() => {
-  // 刷新后回到刷新前的界面（一级 / 二级）
+  // 历史遗留：早期版本把视图/全屏状态存在本地（刷新后停留原界面），现已去掉，顺手清掉这些键
   try {
-    if (localStorage.getItem(VIEW_KEY) === "panel") {
-      panelBuilt.value = true;
-      showMore.value = true;
-    }
+    ["zlion_view", "zlion_scroll", "zlion_fs", "zlion_fs_view"].forEach((k) => localStorage.removeItem(k));
   } catch {
     // 忽略
   }
-  // 记住离开时的滚动位置，刷新后还原（面板在手机上自身可滚，顺手一起存）
-  const panelEl = document.querySelector(".more");
-  const saveScroll = () => {
-    try {
-      sessionStorage.setItem(
-        SCROLL_KEY,
-        JSON.stringify({
-          win: window.scrollY || 0,
-          panel: panelEl ? panelEl.scrollTop : 0,
-        })
-      );
-    } catch {
-      // 忽略
-    }
-  };
-  window.addEventListener("pagehide", saveScroll);
-  window.addEventListener("beforeunload", saveScroll);
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || "null");
-    if (saved) {
-      nextTick(() => {
-        window.scrollTo(0, saved.win || 0);
-        const el = document.querySelector(".more");
-        if (el && saved.panel) el.scrollTop = saved.panel;
-      });
-    }
-  } catch {
-    // 忽略
-  }
-
   document.title = siteConfig.pageTitle;
   // 配置了自定义 logo 时，favicon 同步替换
   if (siteConfig.logo) {
