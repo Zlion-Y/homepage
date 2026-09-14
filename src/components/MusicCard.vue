@@ -634,6 +634,20 @@ watch(index, () => {
   });
 });
 
+// 渐进上屏控制器。⚠️ 必须定义在下面那个 immediate watcher 之前：
+// watcher 的 immediate 回调在 setup 期间就会同步执行并调用 plList.restart()，
+// 若声明留在后面，此刻 plList 还处于 TDZ，会抛
+// 「ReferenceError: Cannot access 'plList' before initialization」。
+// 后果分环境：dev 模式下 Vue 会把这个错误重新抛出去（crash in dev），
+// 整个 App 的更新被中断 —— 表现就是「点左上角进不去二级面板」；
+// 生产构建只 console.error、照常渲染，所以这个 bug 只在本地开发时暴露。
+// 补完最后一行后再定位一次当前播放行：行是渐进追加的，早先那次定位时
+// 后面的行还没进 DOM，容器高度/偏移与最终不一致
+const plList = makeProgressor(playlist, 24, () => scrollPlaylistToActive());
+const plRows = plList.rows;
+const fsQList = makeProgressor(playlist, 32, () => scrollQueueToActive());
+const fsQRows = fsQList.rows;
+
 // 歌单到位后开始渐进上屏（空歌单时 limit 归零，拿到数据再从头补）
 watch(
   () => playlist.value.length,
@@ -768,13 +782,6 @@ function makeProgressor(totalRef, chunk, onDone) {
     stop,
   };
 }
-// 补完最后一行后再定位一次当前播放行：行是渐进追加的，早先那次定位时
-// 后面的行还没进 DOM，容器高度/偏移与最终不一致
-const plList = makeProgressor(playlist, 24, () => scrollPlaylistToActive());
-const plRows = plList.rows;
-const fsQList = makeProgressor(playlist, 32, () => scrollQueueToActive());
-const fsQRows = fsQList.rows;
-
 let isUserScrolling = false;
 let scrollTimeout = null;
 
