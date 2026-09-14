@@ -80,7 +80,7 @@ export const siteConfig = {
     { name: "主页", url: "https://www.zlion.top/" },
     { name: "博客", url: "https://blog.zlion.top/" },
     { name: "资源站", url: "https://alist.zlion.top/" },
-    { name: "音乐接口", url: "https://home-music.zlion.top:446//" },
+    { name: "音乐接口", url: "https://home-music.zlion.top/" },
   ],
   // 热榜平台与顺序（hotlist 卡），可用 key：
   //   weibo 微博 / bilibili B站 / v2ex V2EX / ithome IT之家 / hellogithub HelloGitHub
