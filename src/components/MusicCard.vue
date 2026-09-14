@@ -1093,8 +1093,7 @@ async function resolveProxyUrl(t, ms = 3500) {
     // musicProxy 填了 http:// 地址，被浏览器当作 Mixed Content 拦掉
     if (!proxyWarned) {
       proxyWarned = true;
-      console.warn("[music] 自建音源代理请求失败，已退回 Meting：", e && e.message, "
-检查 musicProxy 是否为 https 地址（HTTPS 页面不能请求 http 资源）");
+        console.warn("[music] 自建音源代理请求失败，已退回 Meting（检查 musicProxy 是否为 https 地址）:", e && e.message);
     }
     return "";
   } finally {
