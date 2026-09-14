@@ -70,11 +70,12 @@ export const siteConfig = {
   //              VIP/版权受限曲目能拿到完整歌曲）；代理解析不到、或代理直链播放失败，
   //              才顺着降级链落到 Meting。
   //   "meting" = 只走公共 Meting 接口，完全不请求代理。
-  // 代理是开源单二进制：https://github.com/Zlion-Y/zlion-music-api
-  // musicProxy 必须是 https（https 页面加载 http 资源会被浏览器拦掉）
+  // musicProxy 留空 = 用同源内置函数（/api/url，随主页一起部署在 Vercel，无需额外后端）；
+  // 填地址 = 用外部自建代理（自建版是 Go 单二进制：https://github.com/Zlion-Y/zlion-music-api）
+  // 注意：填外部地址时必须是 https（https 页面加载 http 资源会被浏览器拦掉）
   musicSource: "proxy",
   // 自建音乐代理地址（musicSource 为 proxy 时生效），不要带结尾斜杠
-  musicProxy: "https://home-music.zlion.top:446",
+  musicProxy: "",
   // 请求代理时使用的音质：128k / 320k / flac / flac24bit
   musicQuality: "320k",
   // 站点监控卡（monitor）：检测各站点是否可访问（访客浏览器直连探测，

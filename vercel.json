@@ -1,8 +1,31 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/*.mjs": {
+      "maxDuration": 60,
+      "includeFiles": "sources/**",
+      "supportsCancellation": true
+    }
+  },
+  "regions": [
+    "hkg1"
+  ],
   "rewrites": [
-    { "source": "/blog-rss", "destination": "https://blog.zlion.top/rss.xml" },
-    { "source": "/netease-search", "destination": "https://music.163.com/api/search/get/web" },
-    { "source": "/netease-album/:id", "destination": "https://music.163.com/api/v1/album/:id" },
-    { "source": "/netease-songs", "destination": "https://music.163.com/api/song/detail/" }
+    {
+      "source": "/blog-rss",
+      "destination": "https://blog.zlion.top/rss.xml"
+    },
+    {
+      "source": "/netease-search",
+      "destination": "https://music.163.com/api/search/get/web"
+    },
+    {
+      "source": "/netease-album/:id",
+      "destination": "https://music.163.com/api/v1/album/:id"
+    },
+    {
+      "source": "/netease-songs",
+      "destination": "https://music.163.com/api/song/detail/"
+    }
   ]
 }

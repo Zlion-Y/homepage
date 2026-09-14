@@ -1089,7 +1089,15 @@ function resetScrollTimeout() {
 // 代理不中转音频流，最终仍是浏览器直连 CDN。
 let proxyWarned = false; // 代理失败只提示一次，避免每首歌都刷控制台
 function proxyEnabled() {
-  return siteConfig.musicSource === "proxy" && !!siteConfig.musicProxy;
+  // musicProxy 留空 = 用**同源**的内置函数（/api/url，跟主页一起部署在 Vercel），
+  // 此时不需要 CORS 白名单、不需要单独域名/证书；填了地址就走外部自建代理。
+  return siteConfig.musicSource === "proxy";
+}
+
+// 直链接口地址：留空同源，否则用外部代理
+function proxyEndpoint() {
+  const base = String(siteConfig.musicProxy || "").replace(/\/+$/, "");
+  return base ? base + "/api/url" : "/api/url";
 }
 
 // 同一首歌的解析结果记一小会儿：换歌来回切时不用反复问代理（代理侧本来也有 15 分钟缓存）
@@ -1108,9 +1116,8 @@ async function resolveProxyUrl(t, ms = 3000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
-    const base = String(siteConfig.musicProxy).replace(/\/+$/, "");
     const q = encodeURIComponent(siteConfig.musicQuality || "320k");
-    const res = await fetch(`${base}/api/url?id=${encodeURIComponent(id)}&source=wy&quality=${q}`, {
+    const res = await fetch(`${proxyEndpoint()}?id=${encodeURIComponent(id)}&source=wy&quality=${q}`, {
       signal: ctrl.signal,
     }).then((r) => r.json());
     // 部分音源返回 http 直链，https 页面下会被浏览器拦掉，统一升到 https
@@ -1118,11 +1125,11 @@ async function resolveProxyUrl(t, ms = 3000) {
     if (memoKey && url) proxyMemo.set(memoKey, { url, at: Date.now() });
     return url;
   } catch (e) {
-    // 静默退回 Meting 候选链，但给一次控制台提示——最常见的失败原因是
-    // musicProxy 填了 http:// 地址，被浏览器当作 Mixed Content 拦掉
+    // 静默退回 Meting 候选链，但给一次控制台提示：
+    // 同源模式下多半是 /api/url 没部署成功；外部代理多半是地址填了 http:// 被混合内容拦掉
     if (!proxyWarned) {
       proxyWarned = true;
-        console.warn("[music] 自建音源代理请求失败，已退回 Meting（检查 musicProxy 是否为 https 地址）:", e && e.message);
+          console.warn("[music] 音源解析失败，已退回 Meting：", e && e.message, "（同源模式请确认 /api/url 已部署；外部代理请确认 musicProxy 是 https 地址）");
     }
     return "";
   } finally {
