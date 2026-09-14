@@ -1752,7 +1752,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  /* 进度条左右各留 4px（见 .progress 的 margin），而按钮自带 8px padding ——
+     容器反向缩 4px，最左/最右按钮的图标边缘就正好落在进度条两端。 */
+  margin: 0 -4px;
+  padding: 0;
   user-select: none;
 }
 
@@ -2279,6 +2282,7 @@ onUnmounted(() => {
     width: min(76%, 300px, 33vh);
   }
 
+
   .fs-lrc {
     padding: 16px 8px 20px;
   }
@@ -2394,6 +2398,9 @@ onUnmounted(() => {
 
 .fs-ptime {
   flex: 0 0 auto;
+  /* 固定宽度：移动端操作控件靠这个常量与进度条精确对齐（时间宽度会随 0:37 / 10:37 抖动） */
+  min-width: 40px;
+  text-align: center;
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.55);
   font-variant-numeric: tabular-nums;
@@ -2770,5 +2777,29 @@ onUnmounted(() => {
 .fs-leave-to {
   opacity: 0;
   transform: translateY(42px);
+}
+
+/* ── 移动端覆盖 ──
+   必须写在样式表**末尾**：与基础规则同优先级，靠后写者生效；
+   放进前面的媒体查询里会被后面定义的基础规则盖掉（这一点实测踩过）。 */
+@media (max-width: 979px) {
+  /* 手机的播放键大一点才好按（桌面保持 FluentPlayer 的 42px 规格） */
+  .fs-play-btn {
+    width: 56px;
+    height: 56px;
+  }
+
+  .fs-play-btn svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* 操作控件铺到进度条两侧：时间固定 40px + 行内 gap 10px = 进度条内缩 50px；
+     侧边按钮 34px 装 24px 图标、图标自带 5px 内缩，再减 5px —— 图标边缘正好压在进度条两端 */
+  .fs-controls {
+    margin: 0 45px;
+    justify-content: space-between;
+    gap: 0;
+  }
 }
 </style>
