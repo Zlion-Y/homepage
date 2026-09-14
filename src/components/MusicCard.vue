@@ -413,6 +413,19 @@ function syncBgShown() {
   });
 }
 
+// 全屏状态记到本地：刷新后仍停在全屏播放器，而不是退回二级界面
+const FS_KEY = "zlion_fs";
+const FS_VIEW_KEY = "zlion_fs_view";
+
+function saveFsState() {
+  try {
+    localStorage.setItem(FS_KEY, fsOpen.value ? "1" : "0");
+    localStorage.setItem(FS_VIEW_KEY, fsView.value);
+  } catch {
+    // 隐私模式下写入失败不影响功能
+  }
+}
+
 function openFs() {
   fsOpen.value = true;
   fsDesktop.value = window.matchMedia("(min-width: 980px)").matches;
@@ -422,6 +435,7 @@ function openFs() {
   resolveFsCover();
   syncBgShown();
   fsQList.restart(); // 打开全屏就开始后台渐进铺队列，点列表时已就绪
+  saveFsState();
   nextTick(() => {
     if (fsView.value === "lyrics") fsLrcFollow(true);
   });
@@ -429,6 +443,7 @@ function openFs() {
 
 function closeFs() {
   fsOpen.value = false;
+  saveFsState();
   document.body.style.overflow = fsPrevBodyOverflow;
 }
 
@@ -597,6 +612,7 @@ function fsCoverLeave() {
 
 // 全屏视图切换：歌词 ⇄ 播放列表（两端一致）
 function fsToggleView(v) {
+  nextTick(saveFsState);
   fsView.value = fsView.value === v ? "lyrics" : v;
 }
 
@@ -1449,6 +1465,16 @@ onMounted(async () => {
       scheduleCoverUpgrade();
       // 随机预载一首（不自动播），避免每次打开都是同一首
       loadAndPlay(Math.floor(Math.random() * playlist.value.length), false);
+      // 刷新前停在全屏播放器的话，这里再打开一次（浏览器不允许无手势自动出声，所以是暂停态）
+      try {
+        if (localStorage.getItem(FS_KEY) === "1") {
+          const v = localStorage.getItem(FS_VIEW_KEY);
+          openFs();
+          if (v === "queue" || v === "cover" || v === "lyrics") fsView.value = v;
+        }
+      } catch {
+        // 忽略
+      }
     } else {
       failedLoad();
     }

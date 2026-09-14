@@ -11,8 +11,8 @@
           style="--d: 0.05s"
           role="button"
           tabindex="0"
-          @click="showMore = true"
-          @keydown.enter="showMore = true"
+          @click="enterPanel($event)"
+          @keydown.enter="enterPanel($event)"
         >
           <LogoBadge :size="58" />
           <h1 class="site-name">{{ siteConfig.siteName }}</h1>
@@ -34,15 +34,23 @@
   <!-- 时长显式给：面板本体不做过渡（一动背景就跟着动），
        动画全在面板内部（卡片错峰浮起/沉下），靠 class 钩子触发，所以要让 Vue
        把 enter/leave-active 保留足够久 -->
-  <Transition name="more" :duration="{ enter: 620, leave: 420 }">
-    <MorePanel v-if="showMore" @close="showMore = false" />
-  </Transition>
+  <!-- 首次打开才挂载，之后只切显示：面板一卸载，里面的音乐卡就跟着销毁、<audio> 停播，
+       所以改成「挂载一次后常驻」。display:none 期间浏览器不渲染，没有额外绘制开销。
+       进/离场动画用自定义的 anim-in / anim-out 类驱动，不走 Vue 的 <Transition>——
+       v-if + v-show + Transition 三者叠加时离场会偶发卡住，面板点返回关不掉。 -->
+  <MorePanel
+    v-if="panelBuilt"
+    :class="panelAnim ? 'anim-' + panelAnim : ''"
+    :style="{ display: showMore ? '' : 'none' }"
+    @close="closePanel"
+  />
 </template>
 
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
 import { applyTilt } from "@/utils/tilt";
+import { firework, tip } from "@/utils/fx";
 import { initCursor } from "@/utils/cursor";
 import Loading from "@/components/Loading.vue";
 import Background from "@/components/Background.vue";
@@ -59,6 +67,11 @@ import Footer from "@/components/Footer.vue";
 const loading = ref(true);
 // 二级「探索更多」面板开关
 const showMore = ref(false);
+// 面板是否已经挂载过：第一次打开才建 DOM，之后常驻（切显示），保证里面的音乐卡不被销毁
+const panelBuilt = ref(false);
+// 视图与滚动位置记到本地，刷新后回到刷新前的界面
+const VIEW_KEY = "zlion_view";
+const SCROLL_KEY = "zlion_scroll";
 // 返回一级时给主页内容补一次浮起动画（见样式里的 .panel-return）
 const returning = ref(false);
 let returnTimer = null;
@@ -72,9 +85,54 @@ const homeCards = {
   siteLinks: siteConfig.homeCards?.siteLinks !== false,
 };
 
+// 面板进/离场的动画类：进场 620ms 让卡片错峰浮起，离场 380ms 淡出 + 卡片沉下
+const panelAnim = ref("");
+let panelAnimTimer = null;
+
+function setPanelAnim(name, ms) {
+  clearTimeout(panelAnimTimer);
+  panelAnim.value = name;
+  panelAnimTimer = setTimeout(() => (panelAnim.value = ""), ms);
+}
+
+function closePanel() {
+  setPanelAnim("out", 380);
+  showMore.value = false;
+}
+
+// 点击进入面板：在鼠标位置放一朵小烟花 + 冒一句提示（文案见 config.panelTips）
+const panelTips = Array.isArray(siteConfig.panelTips) ? siteConfig.panelTips.filter(Boolean) : [];
+let panelTipIdx = 0;
+
+function enterPanel(ev) {
+  // 键盘触发时没有坐标，就用入口元素中心
+  let x = ev && typeof ev.clientX === "number" ? ev.clientX : null;
+  let y = ev && typeof ev.clientY === "number" ? ev.clientY : null;
+  if (x === null) {
+    const el = ev && ev.currentTarget;
+    const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+    if (r) {
+      x = r.left + r.width / 2;
+      y = r.top + r.height / 2;
+    }
+  }
+  firework(x, y);
+  if (panelTips.length) {
+    tip(x, y, panelTips[panelTipIdx++ % panelTips.length]);
+  }
+  setPanelAnim("in", 620);
+  showMore.value = true;
+}
+
 // 面板打开时锁定背景滚动；关闭时给主页补一次"浮起"接住二级卡片的依次沉下
 watch(showMore, (v) => {
   document.body.style.overflow = v ? "hidden" : "";
+  if (v) panelBuilt.value = true;
+  try {
+    localStorage.setItem(VIEW_KEY, v ? "panel" : "home");
+  } catch {
+    // 隐私模式下写入失败，不影响功能
+  }
   if (!v) {
     returning.value = true;
     clearTimeout(returnTimer);
@@ -83,6 +141,45 @@ watch(showMore, (v) => {
 });
 
 onMounted(() => {
+  // 刷新后回到刷新前的界面（一级 / 二级）
+  try {
+    if (localStorage.getItem(VIEW_KEY) === "panel") {
+      panelBuilt.value = true;
+      showMore.value = true;
+    }
+  } catch {
+    // 忽略
+  }
+  // 记住离开时的滚动位置，刷新后还原（面板在手机上自身可滚，顺手一起存）
+  const panelEl = document.querySelector(".more");
+  const saveScroll = () => {
+    try {
+      sessionStorage.setItem(
+        SCROLL_KEY,
+        JSON.stringify({
+          win: window.scrollY || 0,
+          panel: panelEl ? panelEl.scrollTop : 0,
+        })
+      );
+    } catch {
+      // 忽略
+    }
+  };
+  window.addEventListener("pagehide", saveScroll);
+  window.addEventListener("beforeunload", saveScroll);
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || "null");
+    if (saved) {
+      nextTick(() => {
+        window.scrollTo(0, saved.win || 0);
+        const el = document.querySelector(".more");
+        if (el && saved.panel) el.scrollTop = saved.panel;
+      });
+    }
+  } catch {
+    // 忽略
+  }
+
   document.title = siteConfig.pageTitle;
   // 配置了自定义 logo 时，favicon 同步替换
   if (siteConfig.logo) {

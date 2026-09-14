@@ -57,6 +57,9 @@ export const siteConfig = {
   //         monitor 站点监控 / github GitHub
   // 注：github 卡需同时配置 githubUser，music 卡需同时配置 musicPlaylist，
   //     monitor 卡需同时配置 siteMonitors，为空自动隐藏
+  // 点击进入二级「探索更多」面板时，鼠标位置会绽开一朵小烟花并冒一句提示；
+  // 这里是提示文案池（依次轮播），留空数组则只放烟花不显示提示
+  panelTips: ["🎆 欢迎来到探索面板", "🎵 卡片里有全屏播放器", "💡 再点右上角「返回」回来"],
   panelCards: ["news", "hotlist", "music", "epic", "history", "monitor"],
   // GitHub 用户名（GitHub 卡展示 Followers / Repos 数据；不把 github 加进 panelCards 就不显示）
   githubUser: "Zlion-Y",

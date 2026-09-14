@@ -260,3 +260,54 @@ body.custom-cursor * {
     opacity: 0;
   }
 }
+
+/* ── 点击进入二级面板的烟花 + 小提示（见 utils/fx.js） ── */
+.fx-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+}
+
+.fx-tip {
+  position: fixed;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(18, 20, 28, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fx-tip-rise 3.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes fx-tip-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -35%) scale(0.92);
+  }
+  7% {
+    opacity: 1;
+    transform: translate(-50%, -66%) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translate(-50%, -78%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -190%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-tip {
+    display: none;
+  }
+}
