@@ -240,12 +240,13 @@
                 </div>
               </div>
 
-              <div class="fs-progress" @click="seek">
-                <div class="p-bar" :style="{ width: pct + '%' }"></div>
-                <div class="p-thumb" :style="{ left: pct + '%' }"></div>
-              </div>
-              <div class="fs-times">
-                <span>{{ fmt(currentTime) }} / {{ fmt(duration) }}</span>
+              <div class="fs-prow">
+                <span class="fs-ptime">{{ fmt(currentTime) }}</span>
+                <div class="fs-progress" @click="seek">
+                  <div class="p-bar" :style="{ width: pct + '%' }"></div>
+                  <div class="p-thumb" :style="{ left: pct + '%' }"></div>
+                </div>
+                <span class="fs-ptime">{{ fmt(duration) }}</span>
               </div>
 
               <div class="fs-bottom">
@@ -2267,7 +2268,8 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.22);
   cursor: pointer;
   position: relative;
-  margin-top: 14px;
+  flex: 1;
+  min-width: 0;
 }
 
 .fs-progress .p-bar {
@@ -2296,10 +2298,16 @@ onUnmounted(() => {
   transform: translate(-50%, -50%) scale(1);
 }
 
-.fs-times {
+/* 移动端：当前时长 / 进度条 / 总时长，三者一行居中 */
+.fs-prow {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 6px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.fs-ptime {
+  flex: 0 0 auto;
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.55);
   font-variant-numeric: tabular-nums;
@@ -2417,7 +2425,7 @@ onUnmounted(() => {
 .fs-desktop .fs-handle,
 .fs-desktop .fs-from,
 .fs-desktop .fs-info,
-.fs-desktop .fs-times {
+.fs-desktop .fs-ptime {
   display: none;
 }
 
@@ -2493,7 +2501,7 @@ onUnmounted(() => {
 }
 
 /* 桌面底部条：进度条在上，信息/控制/时间在下 */
-.fs-desktop .fs-progress {
+.fs-desktop .fs-prow {
   margin-top: 0;
 }
 
