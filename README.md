@@ -172,8 +172,7 @@ musicQuality: "320k",   // 128k / 320k / flac / flac24bit
 ### 站名字体
 
 左上角站名使用手写艺术字渲染，内置 7 款开源字体（Google Fonts，SIL OFL 许可），
-在 `src/config.js` 的 `siteFont` 里填 key 即可一键切换（写错自动回退 `pacifico`），
-本地预览也可用 `?font=<key>` URL 参数临时覆盖：
+在 `src/config.js` 的 `siteFont` 里填 key 即可一键切换（写错自动回退 `pacifico`）：
 
 ![站名字体效果预览](./docs/fonts/preview.png)
 

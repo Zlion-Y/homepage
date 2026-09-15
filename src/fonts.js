@@ -14,9 +14,7 @@ export const SITE_FONTS = {
   caveat: { file: "Caveat.ttf", css: '"Caveat", system-ui, sans-serif' },
 };
 
-/* 取配置对应的字体描述，未配置/写错 key 时回退到 Pacifico（现役默认）。
-   支持 ?font=<key> URL 参数临时覆盖——换字体预览不用改配置重新构建。 */
+/* 取配置对应的字体描述，未配置/写错 key 时回退到 Pacifico（现役默认）。 */
 export function currentSiteFont() {
-  const q = new URLSearchParams(location.search).get("font");
-  return SITE_FONTS[q] || SITE_FONTS[siteConfig.siteFont] || SITE_FONTS.pacifico;
+  return SITE_FONTS[siteConfig.siteFont] || SITE_FONTS.pacifico;
 }
