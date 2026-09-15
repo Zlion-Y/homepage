@@ -142,6 +142,7 @@ musicBuiltin: true,      // 是否请求同源的 /api/url
 
 音源脚本放 [`sources/`](sources/README.md) 一起部署，或配 `SOURCE_URLS` 指向在线脚本（不用重新部署）。
 部署后打开 `https://你的域名/api/health` 能看到装上了哪些音源、各自的平台与失败原因。
+音源：[https://github.com/guoyue2010/lxmusic-](https://github.com/guoyue2010/lxmusic-)
 
 > 说明：函数默认跑在香港（`hkg1`，离国内接口最近）。实测同一批音源与曲目，机房节点与国内出口的
 > 成功率基本一致；但这类"直链代理"本身在灰区，建议只自用、别公开分发。
