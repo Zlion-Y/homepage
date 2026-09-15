@@ -13,8 +13,13 @@
         <p class="meta dim">湿度 {{ weather.humidity }}% · 体感 {{ weather.feels }}° · {{ weather.wind }}</p>
       </div>
     </div>
-    <div class="chart" v-if="points.length > 1">
-      <svg :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+    <div class="chart" ref="chartEl" v-if="hasForecast">
+      <!-- viewBox 与盒子取 1:1（用户单位 = CSS px），此时缩放恒为 1：
+           <text> 的 11px 就是真的 11px，<circle r="2.6"> 也真的是正圆。
+           ⚠️ 不要写 preserveAspectRatio="none"：一旦 viewBox 与实际盒子比例不符，
+           它会【非等比】铺满，SVG 里的文字会跟着横向拉变形（实测单列布局下 2.29 倍）。
+           这里的默认值 xMidYMid meet 最多等比缩放，是防"字被拉歪"的安全网。 -->
+      <svg v-if="boxW > 0" :viewBox="`0 0 ${boxW} ${boxH}`">
         <defs>
           <linearGradient id="temp-grad-hi" x1="0" y1="0" x2="1" y2="0">
             <stop stop-color="#fca5a5" />
@@ -32,7 +37,7 @@
           <circle :cx="p.x" :cy="p.loY" r="2.6" fill="#22d3ee" />
           <text :x="p.x" :y="p.hiY - 8" text-anchor="middle" class="t-hi">{{ p.hi }}°</text>
           <text :x="p.x" :y="p.loY + 14" text-anchor="middle" class="t-lo">{{ p.lo }}°</text>
-          <text :x="p.x" :y="H - 3" text-anchor="middle" class="t-day">{{ p.label }}</text>
+          <text :x="p.x" :y="dayLabelY" text-anchor="middle" class="t-day">{{ p.label }}</text>
         </g>
       </svg>
     </div>
@@ -40,17 +45,67 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
 
 const CACHE_KEY = "weather_cache";
 const CACHE_MS = 30 * 60 * 1000; // 30 分钟
-const W = 300;
-const H = 104;
+/* 原设计的基准高度：所有纵向坐标都是按 104 高画的，这里保留为比例基准，
+   实测高度变了就等比映射，曲线的相对位置不变（bh=104 时逐像素等同原渲染）。 */
+const DESIGN_H = 104;
 
 const weather = ref(null);
 const forecast = ref([]);
+
+/* ── 尺寸测量 ──
+   原来写死 viewBox="0 0 300 104" + preserveAspectRatio="none"，等于让 300×104 的
+   坐标系被非等比地铺满实际盒子。实测 ≤980px 单列布局下盒子是 686×104：
+   scaleX 2.287 / scaleY 1 —— 曲线被横向拉长，<circle r=2.6> 变成 11.89×5.2 的椭圆，
+   而 <text> 也活在这套坐标系里，11px 的字被渲染成 41.4px 宽。
+   桌面端盒子是 305×108（畸变仅 0.98×）所以一直没被发现。
+   现在改为实测盒子尺寸、viewBox 与之 1:1，几何全按真实像素算。 */
+const chartEl = ref(null);
+const boxW = ref(0);
+const boxH = ref(0);
+let ro = null;
+
+watch(chartEl, (el) => {
+  if (ro) {
+    ro.disconnect();
+    ro = null;
+  }
+  if (!el) return;
+  if (typeof ResizeObserver === "function") {
+    ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect;
+      // 取整后再比对：亚像素抖动不该反复触发几何重算
+      const w = Math.round(r.width);
+      const h = Math.round(r.height);
+      if (w > 0 && w !== boxW.value) boxW.value = w;
+      if (h > 0 && h !== boxH.value) boxH.value = h;
+    });
+    ro.observe(el);
+  } else {
+    const b = el.getBoundingClientRect(); // 老浏览器兜底
+    boxW.value = Math.round(b.width);
+    boxH.value = Math.round(b.height);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (ro) ro.disconnect();
+});
+
+// 有数据就渲染曲线容器（与尺寸是否量到无关，否则 ref 拿不到 → 永远量不到）
+const hasForecast = computed(() => (forecast.value || []).length > 1);
+
+// 纵向：把原设计里的 104 高坐标等比映射到实测高度
+function yAt(designY, bh) {
+  return +((designY / DESIGN_H) * bh).toFixed(2);
+}
+
+const dayLabelY = computed(() => yAt(101, boxH.value));
 
 const weatherIcon = computed(() => {
   const code = String(weather.value?.icon || "");
@@ -65,26 +120,30 @@ const aqiColor = computed(() => {
   return ["#22c55e", "#22c55e", "#eab308", "#f97316", "#ef4444", "#a855f7"][lv] || "#22c55e";
 });
 
-// 未来几天高低温曲线的点（x 均匀分布，y 并集范围映射）
+/* 未来几天高低温曲线的点（x 均匀分布，y 并集范围映射）。
+   注意 x / y 用的都是实测像素尺寸 —— 用户坐标即 CSS px，
+   所以标签字号和圆点半径就是它们在样式里写的值，不会被二次缩放。 */
 const points = computed(() => {
   const days = forecast.value.slice(0, 5);
-  if (days.length < 2) return [];
+  const bw = boxW.value;
+  const bh = boxH.value;
+  if (days.length < 2 || bw < 2 || bh < 2) return []; // 尺寸还没量到，先不画
   const his = days.map((d) => d.temp_max);
   const los = days.map((d) => d.temp_min);
   const lo0 = Math.min(...los);
   const hi1 = Math.max(...his);
   const span = hi1 - lo0 || 1;
-  return days.map((d, i) => {
-    const x = (i / (days.length - 1)) * (W - 40) + 20;
-    return {
-      x,
-      hiY: 24 + (1 - (d.temp_max - lo0) / span) * 34,
-      loY: 56 + (1 - (d.temp_min - lo0) / span) * 16,
-      hi: d.temp_max,
-      lo: d.temp_min,
-      label: i === 0 ? "今天" : i === 1 ? "明天" : (d.week || "").replace("星期", "周"),
-    };
-  });
+  // 左右留白给首尾标签。定值 20px 在宽图上会让点挤在中间，所以按宽度收一点。
+  const padX = Math.min(20, Math.max(8, bw * 0.07));
+  const stepX = (bw - padX * 2) / (days.length - 1);
+  return days.map((d, i) => ({
+    x: +(padX + i * stepX).toFixed(2),
+    hiY: yAt(24 + (1 - (d.temp_max - lo0) / span) * 34, bh),
+    loY: yAt(56 + (1 - (d.temp_min - lo0) / span) * 16, bh),
+    hi: d.temp_max,
+    lo: d.temp_min,
+    label: i === 0 ? "今天" : i === 1 ? "明天" : (d.week || "").replace("星期", "周"),
+  }));
 });
 
 const hiPts = computed(() => points.value.map((p) => ({ x: p.x, y: p.hiY })));
