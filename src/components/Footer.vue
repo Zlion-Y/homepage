@@ -17,7 +17,9 @@ import { computed } from "vue";
 import { siteConfig } from "@/config";
 
 const days = computed(() => {
-  const start = new Date(siteConfig.siteStart).getTime();
+  const [y, m, d] = String(siteConfig.siteStart || "").split("-").map(Number);
+  if (!y || !m || !d) return 0;
+  const start = new Date(y, m - 1, d).getTime();
   if (Number.isNaN(start)) return 0;
   return Math.max(1, Math.floor((Date.now() - start) / 86400000) + 1);
 });

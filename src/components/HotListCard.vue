@@ -120,7 +120,7 @@ async function switchTo(key) {
   }
 }
 
-onMounted(() => switchTo("weibo"));
+onMounted(() => switchTo(active.value));
 </script>
 
 <style scoped>

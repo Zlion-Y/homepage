@@ -2,7 +2,7 @@
   <div class="glass monitor">
     <div class="head">
       <span class="head-left">
-        <Icon name="activity" :size="15" />
+        <Icon name="wifi" :size="15" />
         <span>站点监控</span>
       </span>
       <span class="tip">每分钟自动检测</span>

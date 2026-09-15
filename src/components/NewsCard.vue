@@ -25,7 +25,8 @@ const failed = ref(false);
 
 onMounted(async () => {
   // 按天缓存：当天内刷新不重复请求
-  const today = new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   try {
     const cached = JSON.parse(localStorage.getItem("news_60s") || "null");
     if (cached && cached.date === today && cached.news.length) {

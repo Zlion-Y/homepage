@@ -61,7 +61,10 @@ onMounted(() => {
     "https://t.alcy.cc/ycy",
     "https://www.dmoe.cc/random.php",
   ];
-  const candidates = [bgSrc, ...fallbacks.filter((u) => u !== bgSrc)];
+  const isRemote = /^https?:\/\//.test(bgSrc);
+  const candidates = isRemote
+    ? [bgSrc, ...fallbacks.filter((u) => u !== bgSrc)]
+    : [bgSrc];
   let tried = 0;
   const loadBg = () => {
     if (tried >= candidates.length) {

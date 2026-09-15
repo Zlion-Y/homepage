@@ -181,7 +181,9 @@ onMounted(async () => {
   } catch {
     // 缓存解析失败则正常请求
   }
-  load() || setTimeout(() => load(), 3000);
+  load().then((ok) => {
+    if (!ok) setTimeout(() => load(), 3000);
+  });
 });
 
 async function load() {

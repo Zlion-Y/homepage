@@ -1019,7 +1019,10 @@ function prefetchNextLyrics() {
   const next = playlist.value[(index.value + 1) % playlist.value.length];
   if (!next || !next.lrc || !/^(https?:)?\/\//.test(next.lrc)) return;
   const key = lrcCacheKey(next.lrc);
-  if (lrcMem.has(key) || localStorage.getItem(key)) return;
+  if (lrcMem.has(key)) return;
+  try {
+    if (localStorage.getItem(key)) return;
+  } catch {}
   prefetching = true;
   fetch(next.lrc)
     .then((r) => r.text())
@@ -1202,14 +1205,15 @@ function probeAudio(url, ms) {
 async function playWithProbe(cands, ver) {
   const winner = await new Promise((resolve) => {
     let done = false;
+    let bail = null;
     const finish = (u) => {
-      if (!done) {
-        done = true;
-        resolve(u);
-      }
+      if (done) return;
+      done = true;
+      clearTimeout(bail);
+      resolve(u);
     };
     cands.forEach((u) => probeAudio(u, 4000).then((ok) => ok && finish(u)));
-    setTimeout(() => finish(null), 4100);
+    bail = setTimeout(() => finish(null), 4100);
   });
   if (ver !== loadVersion || !wantPlay) return; // 已切歌或用户已暂停（探活期间点暂停）
   if (winner) {

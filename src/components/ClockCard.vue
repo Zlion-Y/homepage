@@ -34,7 +34,8 @@ const timeParts = computed(() => timeStr.value.split(":"));
 onMounted(async () => {
   timer = setInterval(() => (now.value = new Date()), 1000);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   try {
     const cached = JSON.parse(localStorage.getItem("lunar_today") || "null");
     if (cached && cached.date === today && cached.text) {
