@@ -260,6 +260,26 @@ onUnmounted(() => clearTimeout(returnTimer));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  /* hover 动效：轻浮起 + 手写体字形同形状的柔光，只动 transform/filter，
+     渐变本身不动（仅 transition/transform，不会压住卡片的 backdrop-filter） */
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.4s ease;
+}
+
+/* 悬停（整个 logo 行都是点击区，徽章上悬停也点亮文字）：轻轻上浮 + 双层柔光 */
+.logo-row:hover .site-name,
+.logo-row:focus-visible .site-name {
+  transform: translateY(-3px);
+  filter:
+    drop-shadow(0 10px 22px rgba(129, 140, 248, 0.4))
+    drop-shadow(0 2px 6px rgba(103, 232, 249, 0.28));
+}
+
+/* 按下：贴回去一点，带一点按压手感 */
+.logo-row:active .site-name {
+  transform: translateY(-1px) scale(0.985);
+  transition-duration: 0.15s;
 }
 
 /* 后缀与主名同大小：仅靠手写体的连笔区分段落，不做字号分级 */
@@ -335,5 +355,16 @@ onUnmounted(() => clearTimeout(returnTimer));
 @media (prefers-reduced-motion: reduce) {
   .page.ready .rise {
     animation: none;
+  }
+
+  .site-name {
+    transition: none;
+  }
+
+  .logo-row:hover .site-name,
+  .logo-row:focus-visible .site-name,
+  .logo-row:active .site-name {
+    transform: none;
+    filter: none;
   }
 }</style>
