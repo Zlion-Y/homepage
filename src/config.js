@@ -3,6 +3,12 @@
 export const siteConfig = {
   // 站点名称（左上角 Logo 文字与页脚）
   siteName: "My Home",
+  // 站名手写体（可选值见 src/fonts.js 的 SITE_FONTS，写错自动回退 pacifico）：
+  //   pacifico   圆润复古手写（默认）   dancing  优雅拉丁书法
+  //   greatvibes 铜版体、花饰最多       lobster  复古粗体连字
+  //   kaushan    笔刷手写、有动感       sacramento 细单线连笔、最轻盈
+  //   caveat     随性铅笔手写
+  siteFont: "pacifico",
   // Logo 图标（可选）：留空 = 使用内置的「Z」徽章 SVG；
   // 填图片路径或 URL 即可整体替换（载入页、左上角、浏览器标签页 favicon 同步生效），
   // 例如 "/images/logo.png"（图片放 public/images/ 目录）或 "https://xxx.com/logo.png"

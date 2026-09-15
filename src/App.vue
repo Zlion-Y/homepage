@@ -15,7 +15,7 @@
           @keydown.enter="enterPanel($event)"
         >
           <LogoBadge :size="58" />
-          <h1 class="site-name">
+          <h1 class="site-name" :style="{ fontFamily: siteFont.css }">
             <span class="sn-main">{{ siteNameParts[0] }}</span
             ><span v-if="siteNameParts[1]" class="sn-suffix">{{ siteNameParts[1] }}</span>
           </h1>
@@ -66,6 +66,7 @@ import ClockCard from "@/components/ClockCard.vue";
 import WeatherCard from "@/components/WeatherCard.vue";
 import SiteLinks from "@/components/SiteLinks.vue";
 import Footer from "@/components/Footer.vue";
+import { currentSiteFont } from "@/fonts";
 
 // 站名拆成「主名 + 后缀」两段渲染：主名大字、后缀小一号（`.top` 这种 TLD），
 // 配上手写体就是导航站常见的那种艺术字观感
@@ -74,6 +75,8 @@ const siteNameParts = computed(() => {
   const i = n.indexOf(".");
   return i > 0 ? [n.slice(0, i), n.slice(i)] : [n, ""];
 });
+// 站名手写体：config.siteFont 一行切换（?font= 参数可临时覆盖预览，见 src/fonts.js）
+const siteFont = computed(() => currentSiteFont());
 
 const loading = ref(true);
 // 二级「探索更多」面板开关
@@ -93,7 +96,8 @@ const homeCards = {
   siteLinks: siteConfig.homeCards?.siteLinks !== false,
 };
 
-// 面板进/离场的动画类：进场 620ms 让卡片错峰浮起，离场 380ms 淡出 + 卡片沉下
+// 面板进/离场的动画类：进场 1400ms 让卡片错峰浮起（末卡 5*100ms 延迟 + 0.85s 动画），
+// 离场 380ms 淡出 + 卡片沉下
 const panelAnim = ref("");
 let panelAnimTimer = null;
 
@@ -128,7 +132,7 @@ function enterPanel(ev) {
   if (panelTips.length) {
     tip(x, y, panelTips[panelTipIdx++ % panelTips.length]);
   }
-  setPanelAnim("in", 620);
+  setPanelAnim("in", 1400);
   showMore.value = true;
 }
 
@@ -260,13 +264,29 @@ onUnmounted(() => clearTimeout(returnTimer));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  /* hover 动效：轻浮起 + 手写体字形同形状的柔光，只动 transform/filter，
+     渐变本身不动（仅 transition/transform，不会压住卡片的 backdrop-filter） */
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.4s ease;
 }
 
-/* 后缀（.top 之类）小一号，与主名拉开层次 */
-.site-name .sn-suffix {
-  font-size: 0.62em;
-  letter-spacing: 0;
+/* 悬停（整个 logo 行都是点击区，徽章上悬停也点亮文字）：轻轻上浮 + 双层柔光 */
+.logo-row:hover .site-name,
+.logo-row:focus-visible .site-name {
+  transform: translateY(-3px);
+  filter:
+    drop-shadow(0 10px 22px rgba(129, 140, 248, 0.4))
+    drop-shadow(0 2px 6px rgba(103, 232, 249, 0.28));
 }
+
+/* 按下：贴回去一点，带一点按压手感 */
+.logo-row:active .site-name {
+  transform: translateY(-1px) scale(0.985);
+  transition-duration: 0.15s;
+}
+
+/* 后缀与主名同大小：仅靠手写体的连笔区分段落，不做字号分级 */
 
 /* 右列：一言/时间 等宽，天气长卡横跨整行，下面是网站列表 */
 .right-col {
@@ -339,5 +359,16 @@ onUnmounted(() => clearTimeout(returnTimer));
 @media (prefers-reduced-motion: reduce) {
   .page.ready .rise {
     animation: none;
+  }
+
+  .site-name {
+    transition: none;
+  }
+
+  .logo-row:hover .site-name,
+  .logo-row:focus-visible .site-name,
+  .logo-row:active .site-name {
+    transform: none;
+    filter: none;
   }
 }</style>
