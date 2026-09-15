@@ -2,7 +2,7 @@
 
 export const siteConfig = {
   // 站点名称（左上角 Logo 文字与页脚）
-  siteName: "zlion.top",
+  siteName: "Zlion.Top",
   // Logo 图标（可选）：留空 = 使用内置的「Z」徽章 SVG；
   // 填图片路径或 URL 即可整体替换（载入页、左上角、浏览器标签页 favicon 同步生效），
   // 例如 "/images/logo.png"（图片放 public/images/ 目录）或 "https://xxx.com/logo.png"
