@@ -3,7 +3,7 @@
     <Loading v-if="loading" />
   </Transition>
   <Background />
-  <div class="page" :class="{ ready: !loading, 'panel-return': returning }">
+  <div class="page" :class="{ ready: !loading, 'panel-return': returning, 'panel-open': showMore }">
     <main class="container">
       <section class="col">
         <div
@@ -243,6 +243,14 @@ onUnmounted(() => clearTimeout(returnTimer));
    不会像 opacity 那样压住卡片的 backdrop-filter（这是本项目反复踩过的坑）。 */
 .page.panel-return .container {
   animation: page-return 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* 二级面板是不透明的（.more 自带整屏壁纸 + 不透明底色），主页被完全盖住，
+   继续绘制纯属白跑——7 张卡片的 backdrop-filter 也在里面。
+   用 visibility 而不是 display:none：布局与 .panel-return 的位移动画都不受影响，
+   面板离场（.anim-out 淡出 0.34s）时主页照旧即时可见，观感与从前一致。 */
+.page.panel-open {
+  visibility: hidden;
 }
 
 @keyframes page-return {

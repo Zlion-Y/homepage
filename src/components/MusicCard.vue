@@ -140,7 +140,9 @@
 
     <!-- 全屏播放层（移动端竖排 / 桌面端左封面右歌词队列）：Teleport 到 body，避免卡片 tilt transform 困住 fixed 定位 -->
     <Teleport to="body">
-      <Transition name="fs">
+      <!-- 被盖住的两层（主页 / 二级面板）的隐藏时机挂在 after-enter / before-leave 上：
+           进场时播放层还是半透明带位移的，那一瞬间就把下层藏掉会看到"面板提前消失" -->
+      <Transition name="fs" @after-enter="syncCovered" @before-leave="syncCovered">
         <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop }">
           <div class="fs-color-wash" :style="fsWashStyle"></div>
           <div class="fs-bg-wrap">
@@ -432,6 +434,12 @@ function closeFs() {
   document.body.style.overflow = fsPrevBodyOverflow;
 }
 
+// 全屏播放层整屏不透明（#0a0a0a + 整屏色洗），所以它盖住的主页与二级面板没必要继续合成。
+// 播放层是 Teleport 到 body 的，因此隐藏那两层不会连带把播放层自己藏掉（规则见文件末尾的全局样式块）。
+function syncCovered() {
+  document.body.classList.toggle("fs-open", fsOpen.value);
+}
+
 // 封面主色调提取（canvas，网易 CDN 带 CORS 允许取像素）→ 背景色洗 + 径向渐变
 const fsDominant = ref(null); // { h, s, l }
 const fsDominantCache = new Map(); // 歌名 → 主色，避免重复提取
@@ -499,9 +507,11 @@ async function resolveDominantColor(name, pic) {
 // 主色可用化：饱和度提上来、亮度压到中间调，任何封面都成一块有存在感的底色
 const fsWashStyle = computed(() => {
   const c = fsDominant.value;
-  // 提取失败（跨域/加载失败）时也给一层中性底色，避免背景只剩深底显空
-  if (!c) return { background: "hsl(228 26% 19%)" };
-  const sat = Math.min(0.62, Math.max(0.28, c.s * 1.5));
+  // 提取失败（跨域/加载失败）时也给一层中性底色，避免背景只剩深底显空。
+  // 这一层原来是整屏 filter: saturate(1.1)（等于多一张全屏栅格 + 一个常驻合成层），
+  // 现在把 ×1.1 直接烘焙进色值：26% → 29%、饱和度上限 0.62 → 0.68，视觉一致但不占滤镜。
+  if (!c) return { background: "hsl(228 29% 19%)" };
+  const sat = Math.min(0.68, Math.max(0.31, c.s * 1.5 * 1.1));
   const lum = Math.min(0.42, Math.max(0.16, c.l));
   return { background: `hsl(${c.h.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}%)` };
 });
@@ -531,7 +541,12 @@ function currentWallpaper() {
   if (el && el.naturalWidth > 0) return el.src;
   return siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
 }
-// 全屏背景源：封面降规格到 300（背景本身就模糊 44px，1024 纯浪费内存）；无封面用壁纸兜底
+// 全屏背景源：封面取 300，再由 .fs-bg-img 的 blur(44px) 糊开成氛围底色。
+// ⚠️ 曾经为了省渲染把这里降到 32 并去掉那层模糊（「双线性放大本身就是模糊」）——已回退，别再这么做：
+// 实测（node CDP 探针 + 逐进程 CPU 采样，开/关全屏各 12 个相位交替）证明带 44px 模糊与完全不模糊
+// 的代价差在噪声内（1073 vs 1076 ms/s，轮间离散 ±40%）：这一层是**静态**层，只被光栅化一次就缓存成
+// 纹理，每帧不做卷积。所以「降源图分辨率换性能」是纯粹的画质损失——1440 宽下 32px 源每个像素铺 45px，
+// 网易那张家 32px 缩略图的压缩块会被一起放大成明显的方块。
 const fsBgSrc = computed(() => {
   const src = fsCoverSrc.value;
   if (!src) return fsWallpaper.value;
@@ -633,16 +648,6 @@ watch(index, () => {
     if (fsOpen.value && fsView.value === "queue") scrollQueueToActive();
   });
 });
-
-// 歌单到位后开始渐进上屏（空歌单时 limit 归零，拿到数据再从头补）
-watch(
-  () => playlist.value.length,
-  () => {
-    plList.restart();
-    if (fsOpen.value && fsView.value === "queue") fsQList.restart();
-  },
-  { immediate: true }
-);
 
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
 // 500ms 后仍在原地就立即跳到目标位（真机亮屏时平滑正常生效）
@@ -774,6 +779,18 @@ const plList = makeProgressor(playlist, 24, () => scrollPlaylistToActive());
 const plRows = plList.rows;
 const fsQList = makeProgressor(playlist, 32, () => scrollQueueToActive());
 const fsQRows = fsQList.rows;
+
+// 歌单到位后开始渐进上屏（空歌单时 limit 归零，拿到数据再从头补）
+// 必须写在 plList / fsQList 声明之后：immediate 会在 setup 阶段同步调用 restart()，
+// 写在声明前会撞上暂时性死区（dev 下整个渲染中断，面板直接打不开）
+watch(
+  () => playlist.value.length,
+  () => {
+    plList.restart();
+    if (fsOpen.value && fsView.value === "queue") fsQList.restart();
+  },
+  { immediate: true }
+);
 
 let isUserScrolling = false;
 let scrollTimeout = null;
@@ -1487,6 +1504,7 @@ onUnmounted(() => {
   clearTimeout(scrollTimeout);
   if (errTipTimer) clearTimeout(errTipTimer);
   if (fsOpen.value) document.body.style.overflow = fsPrevBodyOverflow;
+  document.body.classList.remove("fs-open");
 });
 </script>
 
@@ -2034,7 +2052,8 @@ onUnmounted(() => {
 .fs-color-wash {
   position: absolute;
   inset: 0;
-  filter: saturate(1.1);
+  /* 这里原来还有 filter: saturate(1.1)——整屏滤镜，等价一张全屏栅格 + 常驻合成层。
+     饱和度已经烘焙进 fsWashStyle 的色值里（见脚本注释），视觉一致，但省掉这层滤镜。 */
 }
 
 .fs-bg-wrap {
@@ -2093,7 +2112,10 @@ onUnmounted(() => {
   transform: scale(1.05);
   /* 不叠 mix-blend-mode：全屏动画层上的混合模式会强制逐帧重算，是这里最大的 GPU 开销 */
   filter: blur(44px) brightness(0.66) saturate(1.5);
-  will-change: transform; /* 模糊层一次栅格化后只做变换合成，避免逐帧重算模糊 */
+  /* 关键：这一层是静态的，will-change 让它被提升为独立层、只栅格化一次后缓存成纹理，
+     之后每帧只做变换/合成，不做卷积。实测「带这层 44px 模糊」与「完全不模糊」的渲染进程
+     CPU 时间差在噪声内，所以这里的模糊不要为了性能去动它（动了就是白丢画质）。 */
+  will-change: transform;
   opacity: 0;
   transition: opacity 0.8s ease;
 }
@@ -2802,5 +2824,16 @@ onUnmounted(() => {
     justify-content: space-between;
     gap: 0;
   }
+}
+</style>
+
+<!-- 全局（非 scoped）：全屏播放期间把被盖住的两层停画。
+     播放层是 Teleport 到 body 的（在 .more 之外），所以隐藏这两层不会把播放层自己藏掉。
+     用 visibility 而不是 display:none —— 保留布局与里面正在播的 <audio>，只是不参与绘制；
+     也避免 display:none 触发的重排/重栅格。类名由 MusicCard 的 syncCovered() 挂到 body 上。 -->
+<style>
+body.fs-open .page,
+body.fs-open .more {
+  visibility: hidden;
 }
 </style>

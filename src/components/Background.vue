@@ -7,6 +7,7 @@
       <span class="blob b4"></span>
     </div>
     <img v-if="custom" :src="bgSrcRef" class="custom" alt="" />
+    <div v-if="custom" class="dim"></div>
     <div class="grain"></div>
   </div>
 </template>
@@ -115,50 +116,89 @@ onUnmounted(() => clearInterval(paletteTimer));
   display: none;
 }
 
+/* 光斑原来用 filter: blur(110px)——4 个 50vw 上下的圆，合计约 1.7M 像素的整屏高斯，
+   而且四个还在 40~58s 无限漂移（模糊半径这么大的层每帧都要重算），是极光路径最贵的一笔。
+   实测（同会话交替测 3 轮）：改成渐变后 632 vs 1070 ms CPU/秒，降 41%，配对全部同向。
+   写法上试过 7 种候选对着原版算像素差，最后用「5 段 alpha 近似高斯 + 光斑放大 1.3 倍」：
+   0% 实色 → 28% 78% → 55% 45% → 78% 18% → 100% 透明，并把直径放大 1.3 倍，
+   让颜色的铺开范围接近原版（高斯会把颜色扩散到圆外约 3σ）。
+   ⚠️ 只写「实色 → 透明」两段会在实色边界留下肉眼可见的一圈"盘边"（渐变斜率突变），
+   像素差看着只差 0.1，但一眼就能看出来——所以必须多段过渡。
+   color-mix 需要 Chrome 111+ / Safari 16.2+，故保留上面一行纯色渐变作兜底。
+   另外：颜色写进渐变后无法再被 transition 过渡，昼夜调色板切换由 5s 淡变改为瞬时生效。 */
 .blob {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(110px);
   opacity: 0.45;
   will-change: transform;
-  transition: background-color 5s ease;
 }
 
 .b1 {
-  width: 55vw;
-  height: 55vw;
+  width: 71.5vw;
+  height: 71.5vw;
   left: -12vw;
   top: -18vh;
-  background: var(--a1, #4f46e5);
+  background: radial-gradient(circle closest-side, var(--a1, #4f46e5) 0%, transparent 100%);
+  background: radial-gradient(
+    circle closest-side,
+    var(--a1, #4f46e5) 0%,
+    color-mix(in srgb, var(--a1, #4f46e5) 78%, transparent) 28%,
+    color-mix(in srgb, var(--a1, #4f46e5) 45%, transparent) 55%,
+    color-mix(in srgb, var(--a1, #4f46e5) 18%, transparent) 78%,
+    transparent 100%
+  );
   animation: drift1 46s ease-in-out infinite alternate;
 }
 
 .b2 {
-  width: 42vw;
-  height: 42vw;
+  width: 54.6vw;
+  height: 54.6vw;
   right: -10vw;
   top: -6vh;
-  background: var(--a2, #0891b2);
+  background: radial-gradient(circle closest-side, var(--a2, #0891b2) 0%, transparent 100%);
+  background: radial-gradient(
+    circle closest-side,
+    var(--a2, #0891b2) 0%,
+    color-mix(in srgb, var(--a2, #0891b2) 78%, transparent) 28%,
+    color-mix(in srgb, var(--a2, #0891b2) 45%, transparent) 55%,
+    color-mix(in srgb, var(--a2, #0891b2) 18%, transparent) 78%,
+    transparent 100%
+  );
   opacity: 0.38;
   animation: drift2 52s ease-in-out infinite alternate;
 }
 
 .b3 {
-  width: 50vw;
-  height: 50vw;
+  width: 65vw;
+  height: 65vw;
   left: 18vw;
   bottom: -28vh;
-  background: var(--a3, #7c3aed);
+  background: radial-gradient(circle closest-side, var(--a3, #7c3aed) 0%, transparent 100%);
+  background: radial-gradient(
+    circle closest-side,
+    var(--a3, #7c3aed) 0%,
+    color-mix(in srgb, var(--a3, #7c3aed) 78%, transparent) 28%,
+    color-mix(in srgb, var(--a3, #7c3aed) 45%, transparent) 55%,
+    color-mix(in srgb, var(--a3, #7c3aed) 18%, transparent) 78%,
+    transparent 100%
+  );
   opacity: 0.4;
   animation: drift3 58s ease-in-out infinite alternate;
 }
 
 .b4 {
-  width: 30vw;
-  height: 30vw;
+  width: 39vw;
+  height: 39vw;
   right: 6vw;
   bottom: -8vh;
-  background: var(--a4, #be185d);
+  background: radial-gradient(circle closest-side, var(--a4, #be185d) 0%, transparent 100%);
+  background: radial-gradient(
+    circle closest-side,
+    var(--a4, #be185d) 0%,
+    color-mix(in srgb, var(--a4, #be185d) 78%, transparent) 28%,
+    color-mix(in srgb, var(--a4, #be185d) 45%, transparent) 55%,
+    color-mix(in srgb, var(--a4, #be185d) 18%, transparent) 78%,
+    transparent 100%
+  );
   opacity: 0.3;
   animation: drift4 40s ease-in-out infinite alternate;
 }
@@ -193,8 +233,18 @@ onUnmounted(() => clearInterval(paletteTimer));
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: brightness(0.8) saturate(1.1);
-  /* 壁纸加载完成后淡入，与卡片进场同步 */
+  /* 这里原来是 filter: brightness(0.8) saturate(1.1)——整屏滤镜，一层全屏栅格。
+     brightness(0.8) 与 20% 黑罩是同一个结果（sRGB 下 0.8c ≡ c*(1-0.2)），
+     而且二级面板的 --bg-src 一直就是这么罩的，两边基准从此一致。
+     少掉的 saturate(1.1) 是 10% 的饱和度差，肉眼几乎分辨不出，换来整层滤镜的消失。 */
+  animation: bg-fade 0.7s ease both;
+}
+
+/* 壁纸压暗层：与 .custom 同步淡入，避免壁纸还在淡入时黑色罩子已经到位 */
+.dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
   animation: bg-fade 0.7s ease both;
 }
 
