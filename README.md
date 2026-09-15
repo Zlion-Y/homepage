@@ -2,7 +2,7 @@
 
 参考 [imsyy/home](https://github.com/imsyy/home) 风格编写的个人主页，使用 **Vue 3 + Vite** 构建，开箱即用，零配置部署到 Vercel。
 
-![主页效果：壁纸背景 + 毛玻璃卡片](./docs/preview.webp)
+![主页效果：壁纸背景 + 毛玻璃卡片](./docs/preview.jpg)
 
 已收录的站点：
 
@@ -207,7 +207,7 @@ musicBuiltin: true,      // 是否请求同源的 /api/url
 ```
 zlion-homepage/
 ├── docs/
-│   ├── preview.webp         # README 用的主页效果图（不进构建产物）
+│   ├── preview.jpg          # README 用的主页效果图（不进构建产物）
 │   └── fonts/
 │       └── preview.png      # 站名字体效果预览图
 ├── public/
