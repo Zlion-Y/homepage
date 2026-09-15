@@ -1,15 +1,17 @@
-# zlion-home
+# zlion-homepage
 
 **🔗 在线访问：[www.zlion.top](https://www.zlion.top)**
 
 参考 [imsyy/home](https://github.com/imsyy/home) 风格编写的个人主页，使用 **Vue 3 + Vite** 构建，开箱即用，零配置部署到 Vercel。
 
-![zlion-home 主页效果：壁纸背景 + 毛玻璃卡片](./docs/preview.webp)
+![主页效果：壁纸背景 + 毛玻璃卡片](./docs/preview.jpg)
 
 已收录的站点：
 
 - 博客：[blog.zlion.top](https://blog.zlion.top/)
 - 资源站：[alist.zlion.top](https://alist.zlion.top/)
+
+想换成你自己的站点？照着 `src/config.js` 里的 `siteLinks` 改即可。
 
 ## 功能
 
@@ -48,19 +50,19 @@
 
 安装命令：`npm install`
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Zlion-Y/zlion-home&project-name=zlion-home&repository-name=zlion-home)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Zlion-Y/homepage&project-name=zlion-homepage&repository-name=zlion-homepage)
 
-> 想绑定自己的域名（如 `home.zlion.top`）：在 Vercel 项目设置 → **Domains** 中添加，按提示到域名 DNS 处加一条 CNAME 记录指向 `cname.vercel-dns.com` 即可。
+> 想绑定自己的域名（如 `home.example.com`）：在 Vercel 项目设置 → **Domains** 中添加，按提示到域名 DNS 处加一条 CNAME 记录指向 `cname.vercel-dns.com` 即可。
 
 ### 本地开发部署
 
 1. **克隆仓库：**
 
-   **先 [Fork](https://github.com/Zlion-Y/zlion-home/fork) 到自己仓库再克隆（推荐），记得先点 Star 再 Fork 哦！**
+   **先 [Fork](https://github.com/Zlion-Y/homepage/fork) 到自己仓库再克隆（推荐），记得先点 Star 再 Fork 哦！**
 
    ```bash
-   git clone https://github.com/you-github-name/zlion-home.git
-   cd zlion-home
+   git clone https://github.com/you-github-name/zlion-homepage.git
+   cd zlion-homepage
    ```
 
 2. **安装依赖：**
@@ -131,17 +133,23 @@
 - 服务端用 Node 原生 `vm` 跑脚本（脚本本来就是 JS，连垫片都不用），
   多音源按成绩分波对冲、赢家一出即掐断其余、直链探活、连续失败熔断；
 - 直链缓存放在 CDN 边缘（`s-maxage=900`），**命中缓存的请求根本不进函数**，不消耗调用次数；
-- 解析不到时自动降级回 Meting，所以开着也不影响原来能用的情况。
+- 解析不到时自动降级回 Meting，所以**开着也不影响原来能用的情况**。
 
-`config.js` 里对应两个开关：
+`config.js` 里对应的开关（本仓库是 `"proxy"`，默认就用自带解析）：
 
 ```js
-musicSource: "proxy",   // "meting" = 只走公共 Meting 接口；"proxy" = 走自带的 serverless 解析
-musicQuality: "320k",   // 128k / 320k / flac / flac24bit
+musicSource: "proxy",    // "meting" = 只走公共 Meting 接口；"proxy" = 走自带的 serverless 解析（下面两项才生效）
+musicQuality: "320k",    // 128k / 320k / flac / flac24bit
+musicProxy: "",          // 留空 = 只用同源解析；也可填别处的解析服务做并行兜底
+musicBuiltin: true,      // 是否请求同源的 /api/url
 ```
 
 音源脚本放 [`sources/`](sources/README.md) 一起部署，或配 `SOURCE_URLS` 指向在线脚本（不用重新部署）。
 部署后打开 `https://你的域名/api/health` 能看到装上了哪些音源、各自的平台与失败原因。
+音源：[https://github.com/guoyue2010/lxmusic-](https://github.com/guoyue2010/lxmusic-)
+
+> 说明：函数默认跑在香港（`hkg1`，离国内接口最近）。实测同一批音源与曲目，机房节点与国内出口的
+> 成功率基本一致；但这类"直链代理"本身在灰区，建议只自用、别公开分发。
 
 ### 站点监控卡
 
@@ -202,9 +210,9 @@ musicQuality: "320k",   // 128k / 320k / flac / flac24bit
 ## 目录结构
 
 ```
-zlion-home/
+zlion-homepage/
 ├── docs/
-│   ├── preview.webp         # README 用的主页效果图（不进构建产物）
+│   ├── preview.jpg          # README 用的主页效果图（不进构建产物）
 │   └── fonts/
 │       └── preview.png      # 站名字体效果预览图
 ├── public/
@@ -215,6 +223,7 @@ zlion-home/
 │   ├── App.vue              # 页面布局
 │   ├── style.css            # 全局样式（颜色变量等）
 │   └── components/          # 各功能组件
+├── sources/                 # 洛雪音源脚本（随函数一起部署，可换成自己的）
 └── vite.config.js
 ```
 
