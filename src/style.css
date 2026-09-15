@@ -1,8 +1,39 @@
-/* 站名的手写体（SIL OFL，见 public/font/README.md） */
+/* 站名的手写体（均为 Google Fonts 的 SIL OFL 开源字体，见 public/font/README.md；
+   可选项与 key 对应关系见 src/fonts.js，config.js 的 siteFont 一行切换） */
 @font-face {
   font-family: "Pacifico";
   font-display: swap;
   src: url("/font/Pacifico-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Dancing Script";
+  font-display: swap;
+  src: url("/font/DancingScript.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Great Vibes";
+  font-display: swap;
+  src: url("/font/GreatVibes.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Lobster";
+  font-display: swap;
+  src: url("/font/Lobster.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Kaushan Script";
+  font-display: swap;
+  src: url("/font/KaushanScript.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Sacramento";
+  font-display: swap;
+  src: url("/font/Sacramento.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Caveat";
+  font-display: swap;
+  src: url("/font/Caveat.ttf") format("truetype");
 }
 
 :root {

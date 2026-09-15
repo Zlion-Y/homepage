@@ -15,7 +15,7 @@
           @keydown.enter="enterPanel($event)"
         >
           <LogoBadge :size="58" />
-          <h1 class="site-name"
+          <h1 class="site-name" :style="{ fontFamily: siteFont.css }"
             ><span class="sn-main">{{ siteNameParts[0] }}</span
             ><span v-if="siteNameParts[1]" class="sn-suffix">{{ siteNameParts[1] }}</span></h1
           >
@@ -66,6 +66,7 @@ import ClockCard from "@/components/ClockCard.vue";
 import WeatherCard from "@/components/WeatherCard.vue";
 import SiteLinks from "@/components/SiteLinks.vue";
 import Footer from "@/components/Footer.vue";
+import { resolveSiteFont } from "@/fonts";
 
 // 站名拆成「主名 + 后缀」两段渲染：主名大字、后缀小一号（`.top` 这种 TLD），
 // 配上手写体就是导航站常见的那种艺术字观感（与 homepage 仓库同一套处理）
@@ -74,6 +75,8 @@ const siteNameParts = computed(() => {
   const i = n.indexOf(".");
   return i > 0 ? [n.slice(0, i), n.slice(i)] : [n, ""];
 });
+// 站名手写体：config.siteFont 一行切换（可选项见 src/fonts.js）
+const siteFont = computed(() => resolveSiteFont(siteConfig.siteFont));
 
 const loading = ref(true);
 // 二级「探索更多」面板开关
