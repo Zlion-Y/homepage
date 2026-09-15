@@ -119,5 +119,6 @@ export function tip(x, y, text) {
   el.style.left = x + "px";
   el.style.top = y + "px";
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  // 与 style.css 里 fx-tip-rise 的 2s 时长保持同步，稍留 0.1s 缓冲再移除
+  setTimeout(() => el.remove(), 2100);
 }
