@@ -20,8 +20,7 @@
 | `Caveat.ttf` | Caveat | 164KB | 随性铅笔手写（可变字重） | `caveat` |
 
 均已按 ASCII + Latin-1 扩展 + 常用标点子集化（保留全部连笔 OpenType 特性），
-配合 `src/config.js` 的 `siteFont` 配置项一键切换（可选 key 见 `src/fonts.js`，
-本地预览可用 `?font=<key>` 临时覆盖，无需改配置重新构建）。
+配合 `src/config.js` 的 `siteFont` 配置项一键切换（可选 key 见 `src/fonts.js`）。
 
 注：`index.html` 不再静态预加载字体，`src/main.js` 会按当前配置动态注入 preload。
 
