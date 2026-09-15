@@ -262,11 +262,7 @@ onUnmounted(() => clearTimeout(returnTimer));
   color: transparent;
 }
 
-/* 后缀（.top 之类）小一号，与主名拉开层次 */
-.site-name .sn-suffix {
-  font-size: 0.62em;
-  letter-spacing: 0;
-}
+/* 后缀与主名同大小：仅靠手写体的连笔区分段落，不做字号分级 */
 
 /* 右列：一言/时间 等宽，天气长卡横跨整行，下面是网站列表 */
 .right-col {
