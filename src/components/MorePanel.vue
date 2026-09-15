@@ -131,13 +131,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
    只做 transform，不碰 opacity：opacity 动画会让 backdrop-filter 停摆，
    卡片会先透底、模糊后到（就是之前的"毛玻璃慢半拍"）。--i 由模板按顺序注入。 */
 .more.anim-in :deep(.grid > .cell) {
-  animation: cell-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(var(--i, 0) * 40ms);
+  animation: cell-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
 }
 
 /* 返回键与标题：同样只做位移（返回键本身也有 backdrop-filter，不能淡入） */
 .more.anim-in .top {
-  animation: top-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: top-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 @keyframes cell-in {
