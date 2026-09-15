@@ -30,7 +30,7 @@ export const siteConfig = {
   // 署名（页脚版权显示的名字）
   author: "Zlion",
   // 署名链接（可选）：页脚署名会超链接到此地址，如你的主页仓库，留空则显示纯文字
-  repo: "https://github.com/Zlion-Y/zlion-home",
+  repo: "https://github.com/Zlion-Y/homepage",
   // 鼠标特效：自定义圆点光标 + 移动/点击涟漪
   clickEffect: true,
   // 天气城市（可选）：留空 = 按访客 IP 自动定位（uapis 接口，可精确到县级）；
