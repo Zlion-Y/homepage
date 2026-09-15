@@ -1,0 +1,2 @@
+# 音源脚本不计入语言统计，避免 JS 体积虚高导致 GitHub 主语言显示成 JavaScript
+sources/** linguist-vendored
