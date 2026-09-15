@@ -133,7 +133,10 @@ const points = computed(() => {
   const lo0 = Math.min(...los);
   const hi1 = Math.max(...his);
   const span = hi1 - lo0 || 1;
-  // 左右留白给首尾标签。定值 20px 在宽图上会让点挤在中间，所以按宽度收一点。
+  // 左右留白给首尾标签 = clamp(盒宽 7%, 8px, 20px)。
+  // ⚠️ 上限先命中：盒宽 ≥286px 时 7% 已 ≥20，所以那一档恒为 20px ——
+  // 实测三视口的盒子（292 / 618 / 308）算出来全是 20，只有更窄的盒子才开始收缩，
+  // 到盒宽 ~114px 以下触底 8px。
   const padX = Math.min(20, Math.max(8, bw * 0.07));
   const stepX = (bw - padX * 2) / (days.length - 1);
   return days.map((d, i) => ({
