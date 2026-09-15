@@ -90,6 +90,7 @@
 | 配置项 | 说明 |
 | --- | --- |
 | `siteConfig.siteName` | 左上角站点名称 |
+| `siteConfig.siteFont` | 站名手写体，可选 key 见[「站名字体」](#站名字体)一节 |
 | `siteConfig.logo` | Logo 图标：留空用内置「Z」徽章；填图片路径/URL 替换（载入页、左上角、favicon 同步生效） |
 | `siteConfig.greet` | 问候语大标题 |
 | `siteConfig.desc` | 一句话介绍（打字机轮换的第一句） |
@@ -168,6 +169,26 @@ musicQuality: "320k",   // 128k / 320k / flac / flac24bit
 
 替换 `public/favicon.svg`（Z 字母徽章，可改成任何 SVG）。
 
+### 站名字体
+
+左上角站名使用手写艺术字渲染，内置 7 款开源字体（Google Fonts，SIL OFL 许可），
+在 `src/config.js` 的 `siteFont` 里填 key 即可一键切换（写错自动回退 `pacifico`），
+本地预览也可用 `?font=<key>` URL 参数临时覆盖：
+
+![站名字体效果预览](./docs/fonts/preview.png)
+
+| `siteFont` 取值 | 字体 | 风格 |
+|---|---|---|
+| `pacifico`（默认） | Pacifico | 圆润复古手写 |
+| `dancing` | Dancing Script | 优雅拉丁书法 |
+| `greatvibes` | Great Vibes | 铜版体、花饰最多 |
+| `lobster` | Lobster | 复古粗体连字 |
+| `kaushan` | Kaushan Script | 笔刷手写、有动感 |
+| `sacramento` | Sacramento | 细单线连笔、最轻盈 |
+| `caveat` | Caveat | 随性铅笔手写 |
+
+字体文件与详细说明见 [`public/font/README.md`](public/font/README.md)。
+
 ## 性能
 
 一个页面里同时有十几张毛玻璃卡片、一张全屏壁纸和一个 410 行的歌单，**GPU 是这个项目最需要盯的资源**。下面是实测确认过的结论（GTX 1650 / 1920×1080，同机空白页底噪约 38%），改动前请先看一眼，避免把已经踩平的坑再踩回去：
@@ -184,7 +205,9 @@ musicQuality: "320k",   // 128k / 320k / flac / flac24bit
 ```
 zlion-home/
 ├── docs/
-│   └── preview.webp         # README 用的效果图（不进构建产物）
+│   ├── preview.webp         # README 用的主页效果图（不进构建产物）
+│   └── fonts/
+│       └── preview.png      # 站名字体效果预览图
 ├── public/
 │   ├── favicon.svg          # 网站图标
 │   └── images/              # 放 background.jpg 可自定义背景
