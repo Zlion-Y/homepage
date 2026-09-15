@@ -96,7 +96,7 @@ const homeCards = {
   siteLinks: siteConfig.homeCards?.siteLinks !== false,
 };
 
-// 面板进/离场的动画类：进场 1000ms 让卡片错峰浮起（末卡 5*70ms 延迟 + 0.6s 动画），
+// 面板进/离场的动画类：进场 1400ms 让卡片错峰浮起（末卡 5*100ms 延迟 + 0.85s 动画），
 // 离场 380ms 淡出 + 卡片沉下
 const panelAnim = ref("");
 let panelAnimTimer = null;
@@ -132,7 +132,7 @@ function enterPanel(ev) {
   if (panelTips.length) {
     tip(x, y, panelTips[panelTipIdx++ % panelTips.length]);
   }
-  setPanelAnim("in", 1000);
+  setPanelAnim("in", 1400);
   showMore.value = true;
 }
 
