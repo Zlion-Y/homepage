@@ -79,7 +79,7 @@ export const siteConfig = {
   //   "proxy"：走本仓库自带的 serverless 解析（api/ + lib/，跟主页一起部署在 Vercel）——
   //            在 sources/ 里放洛雪自定义源脚本，或配 SOURCE_URLS 指向在线脚本；
   //            前端调同源的 /api/url，不需要额外域名/证书/CORS；解析不到自动降级回 Meting。
-  musicSource: "proxy",
+  musicSource: "meting",
   // 音质：128k / 320k / flac / flac24bit
   musicQuality: "320k",
   // 站点监控卡（monitor）：检测各站点是否可访问（访客浏览器直连探测，

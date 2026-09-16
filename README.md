@@ -140,12 +140,13 @@
 - 全部源失败自动跳下一首，红字提示不打哑巴尬
 - 歌单本地缓存 6 小时，进面板秒开；预载但不自动出声，点击播放才响
 - 歌词同步滚动居中，点歌词行跳转进度
-- **洛雪音源解析**（serverless 函数，随本仓库部署在 Vercel，见下）
+- **洛雪音源解析**（serverless 函数，内置可选，随本仓库部署在 Vercel，见下）
 
-#### 洛雪音源解析（serverless，本仓库已启用）
+#### 洛雪音源解析（serverless，内置可选）
 
-公共 Meting 接口对 VIP / 版权受限曲目拿不到可播放直链。本仓库自带一份 **serverless 版的洛雪音源解析**
-（`api/` + `lib/`，跟主页一起部署在 Vercel），把洛雪（LX Music）自定义音源脚本跑在函数里：
+公共 Meting 接口对 VIP / 版权受限曲目拿不到可播放直链。本仓库内置一份 **serverless 版的洛雪音源解析**
+（`api/` + `lib/`，跟主页一起部署在 Vercel），把洛雪（LX Music）自定义音源脚本跑在函数里。
+**仓库默认 `"meting"` 开箱即用**；想解锁 VIP 曲完整直链就按下面配置启用：
 
 - 前端调**同源**的 `/api/url`：不需要额外域名、证书、CORS 配置，也不用再维护一台服务器；
 - 服务端用 Node 原生 `vm` 跑脚本（脚本本来就是 JS，连垫片都不用），
@@ -153,17 +154,17 @@
 - 直链缓存放在 CDN 边缘（`s-maxage=900`），**命中缓存的请求根本不进函数**，不消耗调用次数；
 - 解析不到时自动降级回 Meting，所以**开着也不影响原来能用的情况**。
 
-`config.js` 里对应的开关（本仓库是 `"proxy"`，默认就用自带解析）：
+`config.js` 里对应的开关：
 
 ```js
-musicSource: "proxy",    // "meting" = 只走公共 Meting 接口；"proxy" = 走自带的 serverless 解析
+musicSource: "meting",   // 默认只走公共 Meting 接口；"proxy" = 走自带的 serverless 解析
 musicQuality: "320k",    // 128k / 320k / flac / flac24bit
 ```
 
-音源脚本放 [`sources/`](sources/README.md) 一起部署，或配 `SOURCE_URLS` 环境变量指向在线脚本——
+启用 `"proxy"` 需要自备音源脚本：放 [`sources/`](sources/README.md)（仓库只带示例脚本，**真实音源请自行准备**，
+参考 [lxmusic-](https://github.com/guoyue2010/lxmusic-)），或配 `SOURCE_URLS` 环境变量指向在线脚本——
 改了远端脚本后不用重新部署，打开 `https://你的域名/api/health?refresh=1` 即可让函数立刻重装全部音源。
 部署后打开 `https://你的域名/api/health` 能看到装上了哪些音源、各自的平台与失败原因。
-音源：[https://github.com/guoyue2010/lxmusic-](https://github.com/guoyue2010/lxmusic-)
 
 > 说明：函数默认跑在香港（`hkg1`，离国内接口最近）。实测同一批音源与曲目，机房节点与国内出口的
 > 成功率基本一致；但这类"直链代理"本身在灰区，建议只自用、别公开分发。
