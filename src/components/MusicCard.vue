@@ -605,6 +605,7 @@ function fsCoverMove(e) {
 }
 function fsCoverEnter() {
   if (siteConfig.cardTilt === false) return;
+  if (window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
   fsHovering.value = true;
   const inner = fsCoverBox.value?.querySelector(".fs-cover-inner");
   if (inner) inner.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";

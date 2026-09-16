@@ -8,6 +8,8 @@ import { siteConfig } from "@/config";
 export function applyTilt(delay = 1500) {
   if (siteConfig.cardTilt === false) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  // 移动端（触屏/粗指针）不启用 3D 倾角，避免卡片失控翻转
+  if (window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
 
   const bind = (el) => {
     if (el._tiltBound) return;
