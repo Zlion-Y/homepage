@@ -55,11 +55,14 @@ onMounted(async () => {
     ]);
 
     const parts = [`农历${lunar.lunar_month_cn}${lunar.lunar_day_cn}`, `${lunar.ganzhi_year}${lunar.zodiac}年`];
-    const next = (holiday.nearby?.next || []).find((n) => n.events?.length);
+    // 过滤掉“补班上班日”和“节气”，只对真正的节日/假期倒数
+    const isReal = (e) => e.type !== "legal_workday_adjust" && e.type !== "solar_term";
+    const next = (holiday.nearby?.next || []).find((n) => n.events?.some(isReal));
     if (next) {
+      const ev = next.events.find(isReal);
       const target = new Date(next.date + "T00:00:00");
       const days = Math.round((target - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 86400000);
-      if (days > 0) parts.push(`距${next.events[0].name} ${days} 天`);
+      if (days > 0) parts.push(`距${ev.name} ${days} 天`);
     }
     lunarText.value = parts.join(" · ");
     try {
