@@ -37,7 +37,7 @@ onMounted(async () => {
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   try {
-    const cached = JSON.parse(localStorage.getItem("lunar_today") || "null");
+    const cached = JSON.parse(localStorage.getItem("lunar_today_v2") || "null");
     if (cached && cached.date === today && cached.text) {
       lunarText.value = cached.text;
       return;
@@ -66,7 +66,7 @@ onMounted(async () => {
     }
     lunarText.value = parts.join(" · ");
     try {
-      localStorage.setItem("lunar_today", JSON.stringify({ date: today, text: lunarText.value }));
+      localStorage.setItem("lunar_today_v2", JSON.stringify({ date: today, text: lunarText.value }));
     } catch {
       // 存储失败不影响展示
     }
