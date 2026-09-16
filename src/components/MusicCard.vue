@@ -582,7 +582,7 @@ const fsShineBg = computed(
 );
 function fsCoverMove(e) {
   const box = fsCoverBox.value;
-  if (!box || !fsHovering.value) return;
+  if (!box || !fsHovering.value || siteConfig.cardTilt === false) return;
   const r = box.getBoundingClientRect();
   const x = e.clientX - r.left;
   const y = e.clientY - r.top;
@@ -593,6 +593,7 @@ function fsCoverMove(e) {
   fsCoverTransform.value = `perspective(1000px) rotateX(${fsTiltRX.value.toFixed(2)}deg) rotateY(${fsTiltRY.value.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`;
 }
 function fsCoverEnter() {
+  if (siteConfig.cardTilt === false) return;
   fsHovering.value = true;
   const inner = fsCoverBox.value?.querySelector(".fs-cover-inner");
   if (inner) inner.style.transition = "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)";

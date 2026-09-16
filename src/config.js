@@ -33,6 +33,9 @@ export const siteConfig = {
   repo: "https://github.com/Zlion-Y/homepage",
   // 鼠标特效：自定义圆点光标 + 移动/点击涟漪
   clickEffect: true,
+  // 卡片 3D 倾联动效：鼠标悬停（触屏按住）卡片时 3D 倾斜 + 微放大 + 光泽跟随，
+  // 同时作用于主页/面板卡片与音乐全屏播放器封面；false = 关闭（回退纯悬停描边）
+  cardTilt: true,
   // 天气城市（可选）：留空 = 按访客 IP 自动定位（uapis 接口，可精确到县级）；
   // 填城市 adcode 可固定显示该城市，如 "410100" 郑州。
   // adcode 查询：https://lbs.amap.com/api/webservice/download

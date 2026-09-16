@@ -113,6 +113,7 @@
 | `siteConfig.author` | 页脚版权署名 |
 | `siteConfig.repo` | 页脚署名的超链接（主页仓库地址），留空显示纯文字 |
 | `siteConfig.clickEffect` | 自定义光标 + 涟漪特效开关 |
+| `siteConfig.cardTilt` | 卡片 3D 倾联动效开关（含音乐全屏播放器封面），`false` 关闭 |
 | `siteConfig.weatherCity` | 天气城市 adcode，留空 = 自动定位 |
 | `siteConfig.bgApi` | 随机壁纸 API，见[「自定义背景」](#自定义背景)一节 |
 | `siteConfig.homeCards` | 主页各卡片开关（greet / blog / hitokoto / clock / weather / siteLinks），`false` 隐藏 |

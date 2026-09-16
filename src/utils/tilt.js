@@ -3,7 +3,10 @@
 // 触屏：手指按住卡片移动即倾斜，页面滚动或从内部滚动容器（歌单/歌词等）开始触摸则放弃，
 //       抬手归零。合成鼠标事件（触摸后浏览器补发的 mousemove）由 touchUntil 时间窗屏蔽。
 // delay：绑定延迟（主页面需等进场动画结束，动态挂载的面板传 0 立即绑定）
+import { siteConfig } from "@/config";
+
 export function applyTilt(delay = 1500) {
+  if (siteConfig.cardTilt === false) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   const bind = (el) => {
