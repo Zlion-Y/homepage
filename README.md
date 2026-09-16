@@ -13,6 +13,11 @@
 
 想换成你自己的站点？照着 `src/config.js` 里的 `siteLinks` 改即可。
 
+想深入了解这个项目？博客上有完整的记录：
+
+- **项目介绍页**：[zlion-home](https://blog.zlion.top/projects/zlion-home/) —— 特性总览与架构说明
+- **完整文章**：[《参考 imsyy/home 重写的个人主页：Vue 3 + Vite 从零到性能治理》](https://blog.zlion.top/posts/zlion-home-vue3/) —— 从选型、布局草图到音乐播放器接洛雪音源，再到 `nvidia-smi` 实测驱动的性能治理，附完整测量方法与踩坑记录
+
 ## 功能
 
 - 载入动画、极光渐变背景（随昼夜时段自动变色，支持自定义背景图）
@@ -33,6 +38,12 @@
 - 页脚建站运行天数
 - 自定义圆点光标 + 移动/点击涟漪、卡片悬停 3D 倾斜 + 光泽动效（手感对齐 FluentPlayer 封面）
 - 移动端自适应、暗色玻璃拟态风格；所有卡片均可在 config.js 中开关与排序
+
+**TODO（计划中）**：
+
+- [ ] 更多卡片支持（欢迎 PR / 提 Issue 讨论想看到的卡片）
+- [ ] 卡片位置自定义（拖拽排序 / 布局记忆）
+- [ ] 音乐卡 AMLL 效果（[Apple Music-like Lyrics](https://github.com/Steve-xd/applemusic-like-lyrics) 歌词动效：逐字点亮、弹性动画、灵感专辑封面背景）
 
 ## 部署
 
@@ -92,6 +103,7 @@
 | 配置项 | 说明 |
 | --- | --- |
 | `siteConfig.siteName` | 左上角站点名称 |
+| `siteConfig.pageTitle` | 浏览器标签页标题 |
 | `siteConfig.siteFont` | 站名手写体，可选 key 见[「站名字体」](#站名字体)一节 |
 | `siteConfig.logo` | Logo 图标：留空用内置「Z」徽章；填图片路径/URL 替换（载入页、左上角、favicon 同步生效） |
 | `siteConfig.greet` | 问候语大标题 |
@@ -99,12 +111,17 @@
 | `siteConfig.motto` | 打字机轮换标语数组，只留一项则固定显示 |
 | `siteConfig.siteStart` | 建站日期，页脚据此显示「已运行 N 天」 |
 | `siteConfig.author` | 页脚版权署名 |
+| `siteConfig.repo` | 页脚署名的超链接（主页仓库地址），留空显示纯文字 |
 | `siteConfig.clickEffect` | 自定义光标 + 涟漪特效开关 |
 | `siteConfig.weatherCity` | 天气城市 adcode，留空 = 自动定位 |
+| `siteConfig.bgApi` | 随机壁纸 API，见[「自定义背景」](#自定义背景)一节 |
 | `siteConfig.homeCards` | 主页各卡片开关（greet / blog / hitokoto / clock / weather / siteLinks），`false` 隐藏 |
 | `siteConfig.panelCards` | 二级面板卡片排列：数组顺序 = 排列顺序，删掉某项 = 隐藏该卡 |
+| `siteConfig.panelTips` | 进入二级面板时的烟花提示文案池，留空数组只放烟花不显示提示 |
 | `siteConfig.githubUser` | GitHub 卡的用户名（需把 `github` 加入 `panelCards` 才显示） |
 | `siteConfig.musicPlaylist` | 音乐卡网易云歌单 ID（需把 `music` 加入 `panelCards` 才显示） |
+| `siteConfig.musicSource` | 播放直链来源：`meting` / `proxy`，见[「音乐播放器」](#音乐播放器)一节 |
+| `siteConfig.musicQuality` | 音质：128k / 320k / flac / flac24bit |
 | `siteConfig.hotPlatforms` | 热榜平台与顺序（weibo / bilibili / v2ex / ithome / hellogithub / zhihu / juejin / sspai 等） |
 | `siteConfig.siteMonitors` | 站点监控卡的目标站点列表（`{ name, url }`，需把 `monitor` 加入 `panelCards`） |
 | `socialLinks` | 「博客更新」卡里的社交图标（GitHub / 邮箱等，**记得改成自己的**） |
@@ -138,13 +155,12 @@
 `config.js` 里对应的开关（本仓库是 `"proxy"`，默认就用自带解析）：
 
 ```js
-musicSource: "proxy",    // "meting" = 只走公共 Meting 接口；"proxy" = 走自带的 serverless 解析（下面两项才生效）
+musicSource: "proxy",    // "meting" = 只走公共 Meting 接口；"proxy" = 走自带的 serverless 解析
 musicQuality: "320k",    // 128k / 320k / flac / flac24bit
-musicProxy: "",          // 留空 = 只用同源解析；也可填别处的解析服务做并行兜底
-musicBuiltin: true,      // 是否请求同源的 /api/url
 ```
 
-音源脚本放 [`sources/`](sources/README.md) 一起部署，或配 `SOURCE_URLS` 指向在线脚本（不用重新部署）。
+音源脚本放 [`sources/`](sources/README.md) 一起部署，或配 `SOURCE_URLS` 环境变量指向在线脚本——
+改了远端脚本后不用重新部署，打开 `https://你的域名/api/health?refresh=1` 即可让函数立刻重装全部音源。
 部署后打开 `https://你的域名/api/health` 能看到装上了哪些音源、各自的平台与失败原因。
 音源：[https://github.com/guoyue2010/lxmusic-](https://github.com/guoyue2010/lxmusic-)
 
@@ -196,17 +212,6 @@ musicBuiltin: true,      // 是否请求同源的 /api/url
 
 字体文件与详细说明见 [`public/font/README.md`](public/font/README.md)。
 
-## 性能
-
-一个页面里同时有十几张毛玻璃卡片、一张全屏壁纸和一个 410 行的歌单，**GPU 是这个项目最需要盯的资源**。下面是实测确认过的结论（GTX 1650 / 1920×1080，同机空白页底噪约 38%），改动前请先看一眼，避免把已经踩平的坑再踩回去：
-
-- **整屏 `mix-blend-mode` 极贵**。背景那层 5% 的颗粒纹理用了 `overlay` 混合，独占约 8 个 GPU 点——整屏混合层会被逐帧重算，哪怕下面什么都没变。改成普通低透明度叠加后，一级界面 GPU 从 49% 降到 41%。
-- **模糊本身不贵，"模糊的背景会变"才贵**。静态壁纸上的 `backdrop-filter`、乃至全屏 44px 模糊叠呼吸动画都几乎不花 GPU（一次栅格化后只剩缩放纹理）；但如果面板背景压在**还在更新**的主页上（时钟每秒、打字机每 35–90ms 改字），整屏模糊就会逐帧重算——二级面板打开时 GPU 从 49% 飙到 73%，根因就在这里。
-- **不要在带毛玻璃的容器上做 `opacity` 动画**。Chromium 在透明度动画期间会暂停 `backdrop-filter` 渲染，卡片会"先透底、模糊后到"；进场/退场只能用 `transform`。
-- **面板本体不要做位移动画**。面板自带壁纸层，本体一动背景就整块跟着平移。现在是面板静止、背景不透明（复用同一张壁纸 `--bg-src`），只有卡片错峰浮起。
-- **长列表要渐进上屏**。410 行歌单一次性渲染 ≈ 5300 个节点、约 100ms 主线程长任务；改成首屏 24 行 + 空闲时间补齐，配合行上 `content-visibility: auto`。注意 `contain-intrinsic-size` 量的是**内容盒**（不含 padding），填成行高会让 `offsetTop` 累积漂移、自动定位偏出上百像素。
-- **长文本必须给 `min-width: 0`**。只写 `text-overflow: ellipsis` 不够，外层 flex/grid 链路上任何一环不能收缩，省略号就不生效（典型：`justify-self: start` 让宽度走 fit-content，而下限仍是 nowrap 文本的 min-content）。
-
 ## 目录结构
 
 ```
@@ -223,6 +228,8 @@ zlion-homepage/
 │   ├── App.vue              # 页面布局
 │   ├── style.css            # 全局样式（颜色变量等）
 │   └── components/          # 各功能组件
+├── api/                     # Vercel serverless 函数（音乐解析 / 健康自检）
+├── lib/                     # 解析核心：音源宿主 / 调度器 / 访问控制
 ├── sources/                 # 洛雪音源脚本（随函数一起部署，可换成自己的）
 └── vite.config.js
 ```

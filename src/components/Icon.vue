@@ -16,6 +16,9 @@
 
 <script setup>
 // 线性图标（基于 Lucide 图标集，ISC License）
+// 取舍说明：所有 path 集中在这一个对象里会全量进 bundle，但每个图标仅 ~100B，
+// 30+ 个合计几 KB，改成按需动态 import 反而要拆 N 个文件 + 引入异步加载闪烁。
+// 只有当图标数量涨到 ~100+ 或单个 path 明显变大时，才值得拆分按需加载。
 defineProps({
   name: { type: String, required: true },
   size: { type: [Number, String], default: 20 },

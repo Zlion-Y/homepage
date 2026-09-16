@@ -8,7 +8,7 @@
         </button>
         <h2>探索更多</h2>
       </header>
-      <div class="grid" :style="{ '--rows': gridRows, '--n': cards.length }">
+      <div class="grid" :style="{ '--rows': gridRows, '--n': cards.length, '--cols': PANEL_COLS }">
         <component
           :is="c.comp"
           v-for="(c, i) in cards"
@@ -55,9 +55,13 @@ const cards = computed(() =>
     .map((key) => ({ key, comp: cardMap[key] }))
     .filter((c) => c.comp && (!needs[c.key] || needs[c.key]()))
 );
-// 行数随卡片数自适应（每行 3 张）
+// 每行列数：桌面端网格列数与行数计算共用这一个常量（经 --cols 注入 CSS），
+// 改列数只动这里，gridRows 不会再跟 CSS 里的硬编码静默错位
+const PANEL_COLS = 3;
+// 行数随卡片数自适应
 const gridRows = computed(
-  () => `repeat(${Math.max(1, Math.ceil(cards.value.length / 3))}, minmax(0, 1fr))`
+  () =>
+    `repeat(${Math.max(1, Math.ceil(cards.value.length / PANEL_COLS))}, minmax(0, 1fr))`
 );
 
 const emit = defineEmits(["close"]);
@@ -224,7 +228,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 列数由 script 的 PANEL_COLS 经 --cols 注入，与行数计算共用同一常量 */
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
   /* 行数随配置的卡片数自适应（--rows 由 script 写入；手机端会被媒体查询覆盖为 none） */
   grid-template-rows: var(--rows, minmax(0, 1fr) minmax(0, 1fr));
   gap: 20px;

@@ -83,15 +83,18 @@ onMounted(async () => {
       }
     );
 
-    // 获星总数：一次搜索拿本人全部公开仓库求和（失败不影响其余数据）
+    // 获星总数：分页搜索本人全部公开仓库求和（失败不影响其余数据）。
+    // 匿名 search API 单页最多 100 条，仓库 >100 时逐页取，最多 5 页兜底。
     let stars = 0;
     try {
-      const s = await fetch(
-        `https://api.github.com/search/repositories?q=user:${user}+fork:true&per_page=100`,
-        { signal: ctrl.signal }
-      ).then((r) => (r.ok ? r.json() : null));
-      if (s && Array.isArray(s.items)) {
-        stars = s.items.reduce((n, r) => n + r.stargazers_count, 0);
+      for (let page = 1; page <= 5; page++) {
+        const s = await fetch(
+          `https://api.github.com/search/repositories?q=user:${user}+fork:true&per_page=100&page=${page}`,
+          { signal: ctrl.signal }
+        ).then((r) => (r.ok ? r.json() : null));
+        if (!s || !Array.isArray(s.items) || !s.items.length) break;
+        stars += s.items.reduce((n, r) => n + r.stargazers_count, 0);
+        if (s.items.length < 100) break; // 不足一页说明翻完了
       }
     } catch {
       // 获星数获取失败置 0
