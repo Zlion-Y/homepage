@@ -246,6 +246,15 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     overflow-y: auto;
   }
 
+  .more::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .more::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 99px;
+  }
+
   .inner {
     height: auto;
     min-height: 100%;

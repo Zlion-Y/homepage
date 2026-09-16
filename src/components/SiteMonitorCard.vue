@@ -258,4 +258,12 @@ onUnmounted(() => clearInterval(timer));
   color: var(--text-dim);
   font-size: 0.84rem;
 }
+.list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+}
 </style>

@@ -2276,6 +2276,11 @@ onUnmounted(() => {
   mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
 }
 
+.fs-lrc::-webkit-scrollbar {
+  display: none;
+}
+.fs-lrc { scrollbar-width: none; }
+
 /* 上下弹性占位：任何一句（含首尾句）都能滚动到窗口正中 */
 .fs-lrc::before,
 .fs-lrc::after {
@@ -2708,6 +2713,15 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 10px;
   padding-right: 8px;
+}
+
+.fs-queue::-webkit-scrollbar {
+  width: 4px;
+}
+
+.fs-queue::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
 }
 
 .fs-q-row {
