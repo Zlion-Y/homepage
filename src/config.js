@@ -47,7 +47,7 @@ export const siteConfig = {
   //     "https://t.alcy.cc/ycy"            （二次元随机）
   //     "https://api.paugram.com/wall/"    （二次元随机）
   //     "https://picsum.photos/1920/1080"  （风景随机，国外源国内较慢）
-  bgApi: "https://uapis.cn/api/v1/image/bing-daily?random=true",
+  bgApi: "https://uapis.cn/api/v1/image/bing-daily",
 
   /* ---------- 主页卡片开关 ---------- */
   // false = 隐藏对应卡片
