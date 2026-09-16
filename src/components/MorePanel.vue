@@ -93,7 +93,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
 
 /* 面板的清晰壁纸层：复用一级界面那张壁纸（--bg-src 是同一个 URL，命中缓存不重复下载），
    观感与一级背景完全一致——清晰、不模糊。
-   亮度对齐壁纸的 filter: brightness(0.8)，这里用 20% 黑罩叠加实现，
+   亮度与一级背景一致（一级 .dim 用 36% 黑罩），这里同样用 36% 黑罩叠加实现，
    刻意不在父层写 filter：filter 会建立 backdrop root，可能影响卡片的 backdrop-filter 取景。 */
 .more::before {
   content: "";
@@ -102,7 +102,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
   position: fixed;
   inset: 0;
   z-index: -1;
-  background-image: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), var(--bg-src, none);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.36), rgba(0, 0, 0, 0.36)), var(--bg-src, none);
   background-size: cover, cover;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;

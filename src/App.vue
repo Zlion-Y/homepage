@@ -42,11 +42,11 @@
        进/离场动画用自定义的 anim-in / anim-out 类驱动，不走 Vue 的 <Transition>——
        v-if + v-show + Transition 三者叠加时离场会偶发卡住，面板点返回关不掉。 -->
   <MorePanel
-    v-if="panelBuilt"
     :class="panelAnim ? 'anim-' + panelAnim : ''"
     :style="{ display: showMore ? '' : 'none' }"
     @close="closePanel"
   />
+
 </template>
 
 <script setup>
@@ -67,6 +67,7 @@ import WeatherCard from "@/components/WeatherCard.vue";
 import SiteLinks from "@/components/SiteLinks.vue";
 import Footer from "@/components/Footer.vue";
 import { currentSiteFont } from "@/fonts";
+import { musicBus } from "@/utils/musicBus";
 
 // 站名拆成「主名 + 后缀」两段渲染：主名大字、后缀小一号（`.top` 这种 TLD），
 // 配上手写体就是导航站常见的那种艺术字观感（与 homepage 仓库同一套处理）
@@ -148,6 +149,12 @@ watch(showMore, (v) => {
 });
 
 onMounted(() => {
+  // 供欢迎卡「首页直接播放/全屏」：面板尚未构建时由它打开。
+  // showMore 的 watcher 会顺带把 panelBuilt 置 true、锁背景滚动。
+  musicBus.setOpenPanel(() => {
+    setPanelAnim("in", 1400);
+    showMore.value = true;
+  });
   // 历史遗留：早期版本把视图/全屏状态存在本地（刷新后停留原界面），现已去掉，顺手清掉这些键
   try {
     ["zlion_view", "zlion_scroll", "zlion_fs", "zlion_fs_view"].forEach((k) => localStorage.removeItem(k));

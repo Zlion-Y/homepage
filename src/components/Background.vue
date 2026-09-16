@@ -247,7 +247,7 @@ onUnmounted(() => clearInterval(paletteTimer));
 .dim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.36);
   animation: bg-fade 0.7s ease both;
 }
 

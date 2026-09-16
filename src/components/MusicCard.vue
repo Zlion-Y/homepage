@@ -1,5 +1,5 @@
 <template>
-  <div class="glass music">
+  <div class="glass music" :style="{ &quot;--music-accent&quot;: musicAccent == null || musicAccent === &quot;&quot; ? undefined : (musicAccent) }">
     <!-- Loading Overlay -->
     <div class="loading-overlay" v-show="loading">
       <Icon name="refresh" :size="30" class="spin" />
@@ -28,7 +28,7 @@
             <h3 class="title" :title="track.name">{{ track.name || "音乐" }}</h3>
             <div class="info-btns">
               <button class="btn-fs" title="全屏播放" @click="openFs">
-                <Icon name="maximize" :size="18" />
+                <Icon name="maximize" :size="16" />
               </button>
             </div>
           </div>
@@ -143,7 +143,7 @@
       <!-- 被盖住的两层（主页 / 二级面板）的隐藏时机挂在 after-enter / before-leave 上：
            进场时播放层还是半透明带位移的，那一瞬间就把下层藏掉会看到"面板提前消失" -->
       <Transition name="fs" @after-enter="syncCovered" @before-leave="syncCovered">
-        <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop }">
+        <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop }" :style="{ &quot;--music-accent&quot;: musicAccent == null || musicAccent === &quot;&quot; ? undefined : (musicAccent) }">
           <div class="fs-color-wash" :style="fsWashStyle"></div>
           <div class="fs-bg-wrap">
             <img
@@ -290,6 +290,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
 import LogoBadge from "@/components/LogoBadge.vue";
+import { musicBus } from "@/utils/musicBus";
 
 // Meting 数据源：与博客完全一致——i-meto 主源（博客实测手机网络可用）+ 两备源
 const APIS = [
@@ -533,6 +534,16 @@ const fsGradStyle2 = computed(() => {
   return {
     background: `radial-gradient(circle at 78% 84%, hsl(${h2.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}% / 0.22) 0%, transparent 62%)`,
   };
+});
+
+// 控件动态取色：从封面色提取强调色，绑到 --music-accent（小卡与全屏共用）。
+// 无封面/提取失败时返回空串 → 模板里不设变量，CSS 回退 var(--music-accent, var(--accent1))。
+const musicAccent = computed(() => {
+  const c = fsDominant.value;
+  if (!c) return "";
+  const sat = Math.min(0.78, Math.max(0.35, c.s * 1.8));
+  const lum = Math.min(0.66, Math.max(0.5, c.l));
+  return `hsl(${c.h.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}%)`;
 });
 
 // 当前站点壁纸：优先复用页面已加载的图，其次配置的随机壁纸接口，最后本地图
@@ -1469,6 +1480,8 @@ function onUserLrcScroll() {
 }
 
 onMounted(async () => {
+  musicBus.register({ togglePlay, openFs });
+  watch(playing, (v) => musicBus.syncPlaying(v), { immediate: true });
   loading.value = true;
   try {
     playlist.value = await playlistReady;
@@ -1503,6 +1516,7 @@ function failedLoad() {
 }
 
 onUnmounted(() => {
+  musicBus.unregister();
   audioEl.value?.pause();
   plList.stop();
   fsQList.stop();
@@ -1533,7 +1547,7 @@ onUnmounted(() => {
   background: rgba(20, 25, 40, 0.6);
   backdrop-filter: blur(2px);
   border-radius: var(--radius);
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .spin {
@@ -1580,7 +1594,7 @@ onUnmounted(() => {
 
 .cover-ph {
   position: absolute;
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
   opacity: 0.4;
 }
 
@@ -1669,7 +1683,7 @@ onUnmounted(() => {
 
 .btn-lrc:hover,
 .btn-lrc.on {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .artist {
@@ -1714,7 +1728,7 @@ onUnmounted(() => {
 }
 
 .btn-mute:hover {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .vol-track {
@@ -1729,7 +1743,7 @@ onUnmounted(() => {
 .vol-fill {
   height: 100%;
   border-radius: 99px;
-  background: var(--accent1);
+  background: var(--music-accent, var(--accent1));
 }
 
 /* Progress */
@@ -1749,7 +1763,7 @@ onUnmounted(() => {
   top: 0;
   height: 100%;
   border-radius: 99px;
-  background: var(--accent1);
+  background: var(--music-accent, var(--accent1));
   transition: width 0.1s linear;
 }
 
@@ -1760,7 +1774,7 @@ onUnmounted(() => {
   height: 12px;
   margin: -6px 0 0 -6px;
   border-radius: 50%;
-  background: var(--accent1);
+  background: var(--music-accent, var(--accent1));
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
   transform: scale(0);
   transition: transform 0.2s ease, left 0.1s linear;
@@ -1797,12 +1811,12 @@ onUnmounted(() => {
 .btn-skip:hover,
 .btn-mode:hover,
 .btn-drawer:hover {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .btn-mode.on,
 .btn-drawer.on {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .btn-skip:active,
@@ -1820,7 +1834,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   background: var(--glass-strong);
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -1830,7 +1844,7 @@ onUnmounted(() => {
 }
 
 .btn-play.playing {
-  background: var(--accent1);
+  background: var(--music-accent, var(--accent1));
   color: #fff;
 }
 
@@ -1883,11 +1897,11 @@ onUnmounted(() => {
 }
 
 .lrc-line:hover {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .lrc-line.active {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
   font-weight: 700;
   font-size: 0.95rem;
 }
@@ -1960,7 +1974,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .pi-meta {
@@ -1977,7 +1991,7 @@ onUnmounted(() => {
 }
 
 .pl-item.active .pi-title {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .pi-artist {
@@ -1999,7 +2013,7 @@ onUnmounted(() => {
 .eq-bars span {
   width: 3px;
   border-radius: 2px;
-  background: var(--accent1);
+  background: var(--music-accent, var(--accent1));
   animation: eq-bounce 1.2s ease-in-out infinite;
 }
 
@@ -2495,7 +2509,7 @@ onUnmounted(() => {
 }
 
 .fs-play-btn:hover {
-  background: var(--accent1);
+  background: var(--music-accent, var(--accent1));
   color: #fff;
 }
 
@@ -2631,7 +2645,7 @@ onUnmounted(() => {
 }
 
 .fs-desktop .fs-progress .p-bar {
-  background: var(--accent1);
+  background: var(--music-accent, var(--accent1));
 }
 
 .fs-desktop .fs-bottom {
@@ -2697,11 +2711,11 @@ onUnmounted(() => {
 .fs-btn.on,
 .fs-side-btn.on,
 .fs-queuebtn.on {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .fs-btn.on {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 /* 队列列表（桌面右侧 / 移动端封面视图） */
@@ -2773,7 +2787,7 @@ onUnmounted(() => {
 }
 
 .fs-q-row.active .fs-q-name {
-  color: var(--accent1);
+  color: var(--music-accent, var(--accent1));
 }
 
 .fs-q-artist {

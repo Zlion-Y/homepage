@@ -1,6 +1,14 @@
 <template>
   <div class="glass greet">
     <span class="q open">“</span>
+    <div class="greet-actions">
+      <button class="ga-btn" :data-tip="musicBus.playing.value ? '⏸ 暂停' : '▶ 播放'" :aria-label="musicBus.playing.value ? '暂停' : '播放'" @click="musicBus.ensureAnd(() => musicBus.togglePlay())">
+        <Icon :name="musicBus.playing.value ? 'pause' : 'play'" :size="17" />
+      </button>
+      <button class="ga-btn" data-tip="⛶ 全屏" aria-label="全屏播放" @click="musicBus.ensureAnd(() => musicBus.openFs())">
+        <Icon name="maximize" :size="16" />
+      </button>
+    </div>
     <p class="hello">{{ hello }}</p>
     <h2>{{ siteConfig.greet }}</h2>
     <p class="desc" ref="descEl">
@@ -13,6 +21,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
+import Icon from "@/components/Icon.vue";
+import { musicBus } from "@/utils/musicBus";
 
 // 按时段问候
 const hello = computed(() => {
@@ -158,6 +168,33 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.greet-actions {
+  position: absolute;
+  top: 16px;
+  right: 22px;
+  display: flex;
+  gap: 6px;
+}
+
+.ga-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.ga-btn:hover {
+  color: var(--text);
+  background: var(--glass-strong);
+  transform: translateY(-2px);
+}
+
 .q {
   /* inline-block 让 transform 生效 */
   display: inline-block;
@@ -204,7 +241,8 @@ onUnmounted(() => {
     padding: 44px 24px 42px;
   }
 
-  .q {
+
+.q {
     font-size: 2.4rem;
   }
 
