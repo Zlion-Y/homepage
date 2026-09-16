@@ -1,22 +1,10 @@
-# zlion-homepage
-
-**🔗 在线访问：[www.zlion.top](https://www.zlion.top)**
+# homepage
 
 参考 [imsyy/home](https://github.com/imsyy/home) 风格编写的个人主页，使用 **Vue 3 + Vite** 构建，开箱即用，零配置部署到 Vercel。
 
 ![主页效果：壁纸背景 + 毛玻璃卡片](./docs/preview.jpg)
 
-已收录的站点：
-
-- 博客：[blog.zlion.top](https://blog.zlion.top/)
-- 资源站：[alist.zlion.top](https://alist.zlion.top/)
-
-想换成你自己的站点？照着 `src/config.js` 里的 `siteLinks` 改即可。
-
-想深入了解这个项目？博客上有完整的记录：
-
-- **项目介绍页**：[zlion-home](https://blog.zlion.top/projects/zlion-home/) —— 特性总览与架构说明
-- **完整文章**：[《参考 imsyy/home 重写的个人主页：Vue 3 + Vite 从零到性能治理》](https://blog.zlion.top/posts/zlion-home-vue3/) —— 从选型、布局草图到音乐播放器接洛雪音源，再到 `nvidia-smi` 实测驱动的性能治理，附完整测量方法与踩坑记录
+「网站列表」「站点监控」等卡片里的站点默认为示例（`example.com`），在 `src/config.js` 里的 `siteLinks` / `siteMonitors` 改成你自己的即可。
 
 ## 功能
 
@@ -43,7 +31,7 @@
 
 - [ ] 更多卡片支持（欢迎 PR / 提 Issue 讨论想看到的卡片）
 - [ ] 卡片位置自定义（拖拽排序 / 布局记忆）
-- [ ] 音乐卡 AMLL 效果（[Apple Music-like Lyrics](https://github.com/Steve-xd/applemusic-like-lyrics) 歌词动效：逐字点亮、弹性动画、灵感专辑封面背景）
+- [ ] 音乐卡 AMLL 效果（[Apple Music-like Lyrics](https://github.com/amll-dev/applemusic-like-lyrics) 歌词动效：逐字点亮、弹性动画、灵感专辑封面背景）
 
 ## 部署
 
@@ -61,7 +49,7 @@
 
 安装命令：`npm install`
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Zlion-Y/homepage&project-name=zlion-homepage&repository-name=zlion-homepage)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Zlion-Y/homepage&project-name=homepage&repository-name=homepage)
 
 > 想绑定自己的域名（如 `home.example.com`）：在 Vercel 项目设置 → **Domains** 中添加，按提示到域名 DNS 处加一条 CNAME 记录指向 `cname.vercel-dns.com` 即可。
 
@@ -72,8 +60,8 @@
    **先 [Fork](https://github.com/Zlion-Y/homepage/fork) 到自己仓库再克隆（推荐），记得先点 Star 再 Fork 哦！**
 
    ```bash
-   git clone https://github.com/you-github-name/zlion-homepage.git
-   cd zlion-homepage
+   git clone https://github.com/you-github-name/homepage.git
+   cd homepage
    ```
 
 2. **安装依赖：**
@@ -217,7 +205,7 @@ musicQuality: "320k",    // 128k / 320k / flac / flac24bit
 ## 目录结构
 
 ```
-zlion-homepage/
+homepage/
 ├── docs/
 │   ├── preview.jpg          # README 用的主页效果图（不进构建产物）
 │   └── fonts/

@@ -42,7 +42,7 @@ import Icon from "@/components/Icon.vue";
 
 // RSS 拉取失败时的兜底链接：复用 siteLinks 里配置的博客地址，
 // 换博客域名时只改 config.js 即可，不再硬编码
-const blogUrl = siteLinks.find((s) => s.icon === "blog")?.url ?? "https://blog.zlion.top/";
+const blogUrl = siteLinks.find((s) => s.icon === "blog")?.url ?? "https://blog.example.com/";
 
 const CACHE_KEY = "blog_posts_cache";
 const CACHE_MS = 30 * 60 * 1000; // 30 分钟

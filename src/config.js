@@ -2,7 +2,7 @@
 
 export const siteConfig = {
   // 站点名称（左上角 Logo 文字与页脚）
-  siteName: "Zlion.Top",
+  siteName: "My Site",
   // 站名手写体（可选值见 src/fonts.js 的 SITE_FONTS，写错自动回退 pacifico）：
   //   pacifico   圆润复古手写（默认）   dancing  优雅拉丁书法
   //   greatvibes 铜版体、花饰最多       lobster  复古粗体连字
@@ -14,7 +14,7 @@ export const siteConfig = {
   // 例如 "/images/logo.png"（图片放 public/images/ 目录）或 "https://xxx.com/logo.png"
   logo: "",
   // 浏览器标签页标题
-  pageTitle: "Shiyan的主页",
+  pageTitle: "我的主页",
   // 问候语（简介卡片大标题）
   greet: "Hello World!",
   // 一句话介绍（也是打字机轮换的第一句）
@@ -26,11 +26,11 @@ export const siteConfig = {
     "把折腾当成生活方式。",
   ],
   // 建站日期（页脚显示「本站已运行 N 天」）
-  siteStart: "2026-09-12",
+  siteStart: "2025-01-01",
   // 署名（页脚版权显示的名字）
-  author: "Zlion",
+  author: "Your Name",
   // 署名链接（可选）：页脚署名会超链接到此地址，如你的主页仓库，留空则显示纯文字
-  repo: "https://github.com/Zlion-Y/homepage",
+  repo: "https://github.com/your-github-name/homepage",
   // 鼠标特效：自定义圆点光标 + 移动/点击涟漪
   clickEffect: true,
   // 卡片 3D 倾联动效：鼠标悬停（触屏按住）卡片时 3D 倾斜 + 微放大 + 光泽跟随，
@@ -71,7 +71,7 @@ export const siteConfig = {
   panelTips: ["🎆 欢迎来到探索面板", "🎵 卡片里有全屏播放器", "💡 再点右上角「返回」回来"],
   panelCards: ["news", "hotlist", "music", "epic", "history", "monitor"],
   // GitHub 用户名（GitHub 卡展示 Followers / Repos 数据；不把 github 加进 panelCards 就不显示）
-  githubUser: "Zlion-Y",
+  githubUser: "your-github-name",
   // 网易云音乐歌单 ID（音乐播放卡），从歌单页地址栏 playlist?id=xxx 获取
   musicPlaylist: "3778678",
   // ── 播放直链来源 ────────────────────────────────
@@ -85,9 +85,8 @@ export const siteConfig = {
   // 站点监控卡（monitor）：检测各站点是否可访问（访客浏览器直连探测，
   // 显示连通状态与响应耗时，60 秒自动刷新）。url 需带 https://
   siteMonitors: [
-    { name: "主页", url: "https://www.zlion.top/" },
-    { name: "博客", url: "https://blog.zlion.top/" },
-    { name: "资源站", url: "https://alist.zlion.top/" },
+    { name: "示例站点", url: "https://www.example.com/" },
+    // { name: "博客", url: "https://blog.example.com/" },
   ],
   // 热榜平台与顺序（hotlist 卡），可用 key：
   //   weibo 微博 / bilibili B站 / v2ex V2EX / ithome IT之家 / hellogithub HelloGitHub
@@ -105,13 +104,13 @@ export const socialLinks = [
     name: "GitHub",
     icon: "github",
     tip: "去 GitHub 看看",
-    url: "https://github.com/Zlion-Y",
+    url: "https://github.com/your-github-name",
   },
   {
     name: "Email",
     icon: "mail",
     tip: "来封邮件吧",
-    url: "mailto:shiyan@zlion.top",
+    url: "mailto:me@example.com",
   },
 ];
 
@@ -120,16 +119,16 @@ export const socialLinks = [
 export const siteLinks = [
   {
     name: "博客",
-    desc: "blog.zlion.top",
+    desc: "blog.example.com",
     icon: "blog",
-    url: "https://blog.zlion.top/",
+    url: "https://blog.example.com/",
   },
   {
     name: "资源站",
-    desc: "alist.zlion.top",
+    desc: "www.example.com",
     icon: "cloud",
-    url: "https://alist.zlion.top/",
+    url: "https://www.example.com/",
   },
   // 想加更多站点？照着上面的格式复制一份即可，例如：
-  // { name: "导航站", desc: "nav.zlion.top", icon: "star", url: "https://nav.zlion.top/" },
+  // { name: "导航站", desc: "nav.example.com", icon: "star", url: "https://nav.example.com/" },
 ];

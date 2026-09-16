@@ -13,7 +13,7 @@
   "rewrites": [
     {
       "source": "/blog-rss",
-      "destination": "https://blog.zlion.top/rss.xml"
+      "destination": "https://blog.example.com/rss.xml"
     },
     {
       "source": "/netease-search",

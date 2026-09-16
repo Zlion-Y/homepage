@@ -44,7 +44,7 @@ SOURCE_URLS = https://gist.githubusercontent.com/xxx/raw/a.js,https://你的服�
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `SOURCE_URLS` | 空 | 远端音源地址，逗号分隔 |
-| `ALLOW_ORIGINS` | `https://www.zlion.top,https://zlion.top` | 允许调用的来源 |
+| `ALLOW_ORIGINS` | `https://www.example.com,https://example.com`（默认空 = 仅同源） | 允许调用的来源，改成你自己的域名 |
 | `API_TOKEN` | 空 | 设了就要求 `?token=` 或 `Authorization: Bearer`（白名单挡不住伪造 header，这个才挡得住） |
 | `QUALITY` | `320k` | 默认音质 `128k`/`320k`/`flac`/`flac24bit` |
 | `VERIFY` | 开 | `off` 跳过直链探活（快，但可能发到死链） |

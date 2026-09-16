@@ -40,7 +40,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/blog-rss": {
-        target: "https://blog.zlion.top",
+        target: "https://blog.example.com", // 改成你自己的博客域名
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/blog-rss/, "/rss.xml"),
       },
@@ -64,7 +64,7 @@ export default defineConfig({
   preview: {
     proxy: {
       "/blog-rss": {
-        target: "https://blog.zlion.top",
+        target: "https://blog.example.com", // 改成你自己的博客域名
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/blog-rss/, "/rss.xml"),
       },
