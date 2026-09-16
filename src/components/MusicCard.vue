@@ -82,7 +82,11 @@
             v-for="(line, i) in lyrics"
             :key="i"
             class="lrc-line"
-            :class="{ active: i === lrcIndex }"
+            :class="[
+                { active: i === lrcIndex },
+                { b1: Math.abs(i - lrcIndex) === 1 },
+                { b2: Math.abs(i - lrcIndex) === 2 }
+              ]"
             @click="seekTo(line.time)"
           >
             {{ line.text }}
@@ -161,8 +165,11 @@
           <div class="fs-grad-2" :style="fsGradStyle2"></div>
           <div class="fs-shade"></div>
 <div class="fs-sheet" ref="fsSheet">
-              <button class="fs-close" title="退出全屏" @click="closeFs">
+              <button class="fs-close" data-tip="⤵ 退出全屏" @click="closeFs">
                 <Icon name="chevron-down" :size="22" />
+              </button>
+              <button class="fs-fullscreen" data-tip="⛶ 全屏" @click="toggleFullscreen">
+                <Icon name="maximize" :size="16" />
               </button>
               <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
                 <span></span>
@@ -197,7 +204,11 @@
                       v-for="(line, i) in lyrics"
                       :key="i"
                       class="fs-lrc-line"
-                      :class="{ active: i === lrcIndex }"
+                      :class="[
+                { active: i === lrcIndex },
+                { b1: Math.abs(i - lrcIndex) === 1 },
+                { b2: Math.abs(i - lrcIndex) === 2 }
+              ]"
                       @click="seekTo(line.time)"
                     >
                       {{ line.text }}
@@ -665,13 +676,17 @@ watch(index, () => {
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
 // 500ms 后仍在原地就立即跳到目标位（真机亮屏时平滑正常生效）
 function smoothScrollTo(el, target) {
-  const before = el.scrollTop;
-  el.scrollTo({ top: target, behavior: "smooth" });
-  setTimeout(() => {
-    if (Math.abs(el.scrollTop - target) > 40 && Math.abs(el.scrollTop - before) < 10) {
-      el.scrollTo({ top: target, behavior: "auto" });
-    }
-  }, 500);
+  const from = el.scrollTop;
+  const dur = 900;
+  const t0 = performance.now();
+  // 平滑减速缓动（无过冲回弹：只朝当前歌词方向平滑滚动到位）
+  const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / dur);
+    el.scrollTop = from + (target - from) * easeOutCubic(p);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 // 全屏歌词跟随当前句（居中）
@@ -815,6 +830,7 @@ const coverSpinning = computed(() => playing.value);
 // 切歌时始终解析官方高清封面（主卡小封面与全屏共用，面板关闭也在后台预取）
 watch(track, () => {
   resolveFsCover();
+  syncMediaSession();
 });
 
 // 网易云 CDN 加尺寸参数取高清封面（1024²），其他图源原样返回
@@ -1153,9 +1169,17 @@ async function resolveProxyUrl(t, ms = 5000) {
 let loadVersion = 0; // 每次 loadAndPlay 自增；旧曲的 play 回调/降级链全部作废
 let wantPlay = false; // 用户是否要求出声：预载阶段任何失败都保持静默
 let trackUrls = []; // 当前曲候选源（Meting 主链 + 各备源的单曲解析）
+// 预载的下一首「已知可用」源：切歌命中时直接复用，跳过竞速探活（减少静音空档）
+let prefetchMemo = null; // { index, url, at }
+let prefetchOn = false;
 let trackUrlIdx = 0;
 let errorSkipTimer = null;
 let loadTimer = null; // 看门狗：源挂起（不报错也不出声）时强制走降级链
+
+// 连续整曲「全部源都失败」的计数：超过阈值就不再自动无限跳歌，
+// 明确提示并暂停等用户手动重试（整份歌单都是死链时避免无限循环）
+const MAX_CONSECUTIVE_SKIPS = 3;
+let consecutiveSkips = 0;
 
 function clearLoadTimer() {
   if (loadTimer) {
@@ -1184,6 +1208,8 @@ function playCurrentUrl(autoPlay, ver) {
   audio.play().then(() => {
     if (ver !== loadVersion) return;
     playing.value = true;
+    consecutiveSkips = 0;
+    prefetchNextTrack();
     errTip.value = "";
   }).catch((e) => {
     // 过期或被新加载打断（AbortError）一律静默，交给 error 事件走降级链
@@ -1236,6 +1262,27 @@ async function playWithProbe(cands, ver) {
   playCurrentUrl(true, ver);
 }
 
+function prefetchWinnerFor(i) {
+  if (prefetchMemo && prefetchMemo.index === i && Date.now() - prefetchMemo.at < 5 * 60 * 1000) {
+    return prefetchMemo.url;
+  }
+  return "";
+}
+// 后台探活下一首（顺序模式的下一曲）候选源：切歌时命中 direct 复用，减少静音空档
+function prefetchNextTrack() {
+  const n = playlist.value.length;
+  if (prefetchOn || n < 2) return;
+  const idx = (index.value + 1) % n;
+  if (prefetchMemo && prefetchMemo.index === idx && Date.now() - prefetchMemo.at < 5 * 60 * 1000) return;
+  const nt = playlist.value[idx];
+  const cands = nt ? metingCandidates(nt).slice(0, 3) : [];
+  if (!cands.length) return;
+  prefetchOn = true;
+  Promise.any(cands.map((u) => probeAudio(u, 4000).then((ok) => (ok ? u : Promise.reject()))))
+    .then((url) => { prefetchMemo = { index: idx, url, at: Date.now() }; })
+    .catch(() => {}) // 下一首全部失败：保持原降级链即可
+    .finally(() => (prefetchOn = false));
+}
 function loadAndPlay(i, autoPlay = true) {
   if (i < 0 || i >= playlist.value.length) return;
   index.value = i;
@@ -1282,7 +1329,8 @@ function loadAndPlay(i, autoPlay = true) {
 
   if (!proxyEnabled()) {
     // 只走 Meting：完全不碰代理，候选链内部竞速
-    begin(meting);
+    const pw = prefetchWinnerFor(i);
+    begin(pw ? [pw, ...meting.filter((u) => u !== pw)] : meting, !pw);
     return;
   }
   // 代理优先：等代理解析出直链，**拿到就直接播**，不把 Meting 拉进来一起竞速——
@@ -1331,6 +1379,11 @@ function onAudioError() {
     playCurrentUrl(true, ver);
   } else {
     playing.value = false;
+    consecutiveSkips++;
+    if (consecutiveSkips >= MAX_CONSECUTIVE_SKIPS) {
+      showErrTip("连续多首无法播放，已暂停自动切歌（可能网络异常或歌单失效），请点下一首重试", 0);
+      return;
+    }
     showErrTip("播放失败，已自动切换下一首");
     if (errorSkipTimer) clearTimeout(errorSkipTimer);
     errorSkipTimer = setTimeout(() => {
@@ -1342,10 +1395,11 @@ function onAudioError() {
 }
 
 let errTipTimer = null;
-function showErrTip(msg) {
+function showErrTip(msg, ms = 2600) {
   errTip.value = msg;
   if (errTipTimer) clearTimeout(errTipTimer);
-  errTipTimer = setTimeout(() => (errTip.value = ""), 2600);
+  if (!ms) return; // ms=0：常驻提示，不自动清除
+  errTipTimer = setTimeout(() => (errTip.value = ""), ms);
 }
 
 // 歌单点击选歌：点正在播的当前曲 = 暂停，其余 = 切歌播放（与博客一致）
@@ -1416,7 +1470,10 @@ function onTime() {
   const audio = audioEl.value;
   if (!audio) return;
   // 元数据/进度到达 = 当前源活着，撤掉挂起看门狗
-  if (audio.duration) clearLoadTimer();
+  if (audio.duration) {
+    clearLoadTimer();
+    consecutiveSkips = 0; // 源活着 = 播放健康，连续失败清零
+  }
   currentTime.value = audio.currentTime || 0;
   duration.value = audio.duration || 0;
   updateLrcHighlight(audio.currentTime || 0);
@@ -1482,7 +1539,11 @@ function onUserLrcScroll() {
 
 onMounted(async () => {
   musicBus.register({ togglePlay, openFs });
-  watch(playing, (v) => musicBus.syncPlaying(v), { immediate: true });
+  bindMediaSession();
+  watch(playing, (v) => {
+    musicBus.syncPlaying(v);
+    if ("mediaSession" in navigator) navigator.mediaSession.playbackState = v ? "playing" : "paused";
+  }, { immediate: true });
   loading.value = true;
   try {
     playlist.value = await playlistReady;
@@ -1511,6 +1572,53 @@ onMounted(async () => {
   loading.value = false;
   // 定位不在这一步做：此时行还没补齐，偏移不准，交给补齐完成后的 onDone
 });
+
+// ── MediaSession 系统媒体控制（锁屏/通知栏）：封面、歌名、上一首/下一首/进度┅┅
+function bindMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    const ms = navigator.mediaSession;
+    ms.setActionHandler("play", () => togglePlay());
+    ms.setActionHandler("pause", () => togglePlay());
+    ms.setActionHandler("previoustrack", () => prev());
+    ms.setActionHandler("nexttrack", () => next(false));
+    if (ms.setActionHandler("seekto")) {
+      ms.setActionHandler("seekto", (d) => {
+        const a = audioEl.value;
+        if (a && d && d.seekTime != null) a.currentTime = d.seekTime;
+      });
+    }
+  } catch {
+    // 不支持的动作或被禁用时静默跳过
+  }
+}
+
+function syncMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  const t = track.value;
+  const cover = t && t.pic ? hdCover(t.pic) : "";
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: (t && t.name) || "音乐",
+      artist: (t && t.artist) || "",
+      album: "",
+      artwork: cover ? [{ src: cover, sizes: "512x512", type: "image/jpeg" }] : [],
+    });
+  } catch {
+    // 某些环境不支持 MediaMetadata / artwork，忽略
+  }
+}
+// 电脑全屏：进入/退出浏览器的原生全屏（夹头式）。带 webkit 前缀兼容 Safari
+function toggleFullscreen() {
+  const docEl = document.documentElement;
+  if (!document.fullscreenElement) {
+    const req = (docEl.requestFullscreen && docEl.requestFullscreen.bind(docEl)) || (docEl.webkitRequestFullscreen && docEl.webkitRequestFullscreen.bind(docEl));
+    req && req();
+  } else {
+    const exit = (document.exitFullscreen && document.exitFullscreen.bind(document)) || (document.webkitExitFullscreen && document.webkitExitFullscreen.bind(document));
+    exit && exit();
+  }
+}
 
 function failedLoad() {
   playlist.value = [];
@@ -1894,7 +2002,19 @@ onUnmounted(() => {
   color: var(--text-dim);
   padding: 4px 0;
   cursor: pointer;
-  transition: all 0.3s ease;
+  filter: blur(3px);
+  opacity: 0.55;
+  transition: filter 0.9s ease, opacity 0.9s ease, color 0.3s ease, font-size 0.3s ease;
+}
+
+.lrc-line.b1 {
+  filter: blur(1.2px);
+  opacity: 0.75;
+}
+
+.lrc-line.b2 {
+  filter: blur(2.2px);
+  opacity: 0.62;
 }
 
 .lrc-line:hover {
@@ -1902,9 +2022,17 @@ onUnmounted(() => {
 }
 
 .lrc-line.active {
-  color: var(--music-accent, var(--accent1));
+  color: rgba(255, 255, 255, 0.74);
   font-weight: 700;
   font-size: 0.95rem;
+  filter: none;
+  opacity: 1;
+}
+
+/* 鼠标移入歌词区：取消其他行的模糊，方便预览/点歌 */
+.lrc-container:hover .lrc-line {
+  filter: none;
+  opacity: 1;
 }
 
 .lrc-empty {
@@ -2309,13 +2437,33 @@ onUnmounted(() => {
   line-height: 1.55;
   color: rgba(255, 255, 255, 0.42);
   cursor: pointer;
-  transition: color 0.25s ease, font-size 0.25s ease;
+  filter: blur(4px);
+  opacity: 0.5;
+  transition: filter 0.9s ease, opacity 0.9s ease, color 0.25s ease, font-size 0.25s ease;
+}
+
+.fs-lrc-line.b1 {
+  filter: blur(1.5px);
+  opacity: 0.72;
+}
+
+.fs-lrc-line.b2 {
+  filter: blur(2.8px);
+  opacity: 0.55;
 }
 
 .fs-lrc-line.active {
-  color: #fff;
+  color: rgba(255, 255, 255, 0.74);
   font-weight: 700;
   font-size: 1.22rem;
+  filter: none;
+  opacity: 1;
+}
+
+/* 鼠标移入全屏歌词区：取消其他行的模糊，方便预览/点歌 */
+.fs-lrc:hover .fs-lrc-line {
+  filter: none;
+  opacity: 1;
 }
 
 /* 手机端竖排：封面在歌词尚未滚动时四周太空。实测 390×844：封面只有 210px 宽
@@ -2590,6 +2738,30 @@ onUnmounted(() => {
 }
 
 .fs-desktop .fs-close:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+.fs-fullscreen {
+  display: none;
+}
+
+.fs-desktop .fs-fullscreen {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.38);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.fs-desktop .fs-fullscreen:hover {
   color: rgba(255, 255, 255, 0.85);
 }
 
