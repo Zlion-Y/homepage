@@ -227,7 +227,7 @@ homepage/
 ## 致谢
 
 - 布局与功能灵感来自 [imsyy/home](https://github.com/imsyy/home)（MIT License）
-- **音乐播放器实现参考 [CuteLeaf/Firefly](https://github.com/CuteLeaf/Firefly) 项目的 MusicManager**（多源降级、链接自愈等核心逻辑照搬自该项目的优秀设计，特此致谢）
+- 音乐播放器实现参考 [CuteLeaf/Firefly](https://github.com/CuteLeaf/Firefly) 项目的 MusicManager
 - 图标基于 [Lucide](https://lucide.dev/)（ISC License）
 - 一言 API：[hitokoto.cn](https://hitokoto.cn/)；今日诗词：[jinrishici.com](https://www.jinrishici.com/)
 - 天气 / 热榜 / 新闻等数据接口：[uapis.cn](https://uapis.cn/)、[60s API](https://github.com/vikiboss/60s)
