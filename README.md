@@ -30,7 +30,6 @@
 **TODO（计划中）**：
 
 - [ ] 更多卡片支持（欢迎 PR / 提 Issue 讨论想看到的卡片）
-- [❌] 卡片位置自定义（拖拽排序 / 布局记忆）
 - [ ] 音乐卡 AMLL 效果（[Apple Music-like Lyrics](https://github.com/amll-dev/applemusic-like-lyrics) 歌词动效：逐字点亮、弹性动画、灵感专辑封面背景）
 
 ## 部署
