@@ -695,6 +695,7 @@ watch(index, () => {
   });
 });
 
+
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
 // 500ms 后仍在原地就立即跳到目标位（真机亮屏时平滑正常生效）
 let smoothToken = 0;
@@ -810,6 +811,22 @@ function fsDragEnd(e) {
 const audioEl = ref(null);
 const lrcEl = ref(null);
 const plEl = ref(null);
+
+// 播放列表容器进入视口（首次打开面板）时定位当前行：
+// 二级面板默认 display:none，补齐完成的 onDone 定位时 offsetTop 读不到（=0），
+// 列表停在顶部；等容器真正可见再补一次定位。
+let plSeenObserver = null;
+watch(plEl, (el) => {
+  if (plSeenObserver || !el || !("IntersectionObserver" in window)) return;
+  plSeenObserver = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) {
+      plSeenObserver.disconnect();
+      plSeenObserver = null;
+      nextTick(() => scrollPlaylistToActive());
+    }
+  }, { threshold: 0.01 });
+  plSeenObserver.observe(el);
+});
 
 // 歌单渐进上屏：410 行一次性渲染要建约 5300 个节点，是一次约 100ms 的主线程长任务
 // （点开二级面板当场掉帧的真凶）。改成分帧追加——首屏只建 chunk 行，其余在空闲时间
@@ -1781,6 +1798,10 @@ onUnmounted(() => {
   audioEl.value?.pause();
   plList.stop();
   fsQList.stop();
+  if (plSeenObserver) {
+    plSeenObserver.disconnect();
+    plSeenObserver = null;
+  }
   if (lrcAbort) lrcAbort.abort();
   clearLoadTimer();
   if (errorSkipTimer) clearTimeout(errorSkipTimer);
@@ -2645,6 +2666,7 @@ onUnmounted(() => {
    若不加限定会把这些行的模糊/强调态全取消，移动端“模糊丢失”。 */
 @media (hover: hover) {
   .fs-lrc:hover .fs-lrc-line {
+    filter: none;
     opacity: 1;
   }
 }
@@ -2989,10 +3011,25 @@ onUnmounted(() => {
   font-size: clamp(18px, 2.2vw, 34px);
   line-height: 1.6;
   font-weight: 600;
+  /* 桌面端保留模糊层次（移动端已去模糊，这里单独补回） */
+  filter: blur(4px);
+  opacity: 0.5;
+}
+
+.fs-desktop .fs-lrc-line.b1 {
+  filter: blur(1.5px);
+  opacity: 0.72;
+}
+
+.fs-desktop .fs-lrc-line.b2 {
+  filter: blur(2.8px);
+  opacity: 0.55;
 }
 
 .fs-desktop .fs-lrc-line.active {
   color: #fff;
+  filter: none;
+  opacity: 1;
 }
 
 /* 桌面底部条：进度条在上，信息/控制/时间在下 */
