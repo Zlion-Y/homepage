@@ -10,6 +10,26 @@
   "regions": [
     "hkg1"
   ],
+  "headers": [
+    {
+      "source": "/font/(*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/images/(*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/favicon.svg",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/blog-rss",
@@ -17,15 +37,15 @@
     },
     {
       "source": "/netease-search",
-      "destination": "https://music.163.com/api/search/get/web"
+      "destination": "/api/netease-search"
     },
     {
       "source": "/netease-album/:id",
-      "destination": "https://music.163.com/api/v1/album/:id"
+      "destination": "/api/netease-album?id=:id"
     },
     {
       "source": "/netease-songs",
-      "destination": "https://music.163.com/api/song/detail/"
+      "destination": "/api/netease-songs"
     }
   ]
 }

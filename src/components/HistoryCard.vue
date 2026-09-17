@@ -21,6 +21,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
+import { cachedFetch } from "@/utils/cachedFetch";
 import Icon from "@/components/Icon.vue";
 
 const events = ref([]);
@@ -28,16 +29,27 @@ const date = ref("");
 const failed = ref(false);
 
 onMounted(async () => {
+  // 历史上的今天按日变化：TTL 1 小时兜底（跨天最多陈旧 1h）
   try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch("https://uapis.cn/api/v1/history/programmer/today", {
-      signal: ctrl.signal,
-    }).then((r) => r.json());
-    if (!Array.isArray(res.events) || !res.events.length) throw new Error("empty");
-    date.value = res.date || "";
-    // 重要度排序，取前 12 条
-    events.value = [...res.events].sort((a, b) => (b.importance || 0) - (a.importance || 0)).slice(0, 12);
+    const data = await cachedFetch({
+      key: "history_today",
+      ttl: 60 * 60 * 1000,
+      loader: async (signal) => {
+        const res = await fetch("https://uapis.cn/api/v1/history/programmer/today", { signal }).then((r) => r.json());
+        if (!Array.isArray(res.events) || !res.events.length) return null;
+        return {
+          date: res.date || "",
+          // 重要度排序，取前 12 条
+          events: [...res.events].sort((a, b) => (b.importance || 0) - (a.importance || 0)).slice(0, 12),
+        };
+      },
+    });
+    if (data) {
+      date.value = data.date;
+      events.value = data.events;
+    } else {
+      failed.value = true;
+    }
   } catch {
     failed.value = true;
   }
@@ -93,7 +105,8 @@ onMounted(async () => {
   transition: background 0.25s ease;
 }
 
-.list li:hover {
+.list li:hover,
+.list li:focus-visible {
   background: var(--glass-strong);
 }
 

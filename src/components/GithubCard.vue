@@ -49,6 +49,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
+import { cachedFetch } from "@/utils/cachedFetch";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
 
@@ -64,56 +65,47 @@ function fmtNum(n) {
 onMounted(async () => {
   // 缓存 1h（GitHub 官方 API 匿名限额 60 次/时/IP，缓存避免触顶）
   try {
-    const cached = JSON.parse(localStorage.getItem("github_profile_v1") || "null");
-    if (cached && cached.login && Date.now() - cached.ts < 60 * 60 * 1000) {
-      profile.value = cached;
-      return;
-    }
-  } catch {
-    // 缓存解析失败则正常请求
-  }
+    const p = await cachedFetch({
+      key: "github_profile_v1",
+      ttl: 60 * 60 * 1000,
+      isFresh: (c) => !!c.data.login,
+      timeout: 10000,
+      loader: async (signal) => {
+        const u = await fetch(`https://api.github.com/users/${user}`, { signal }).then((r) => {
+          if (!r.ok) throw new Error("user " + r.status);
+          return r.json();
+        });
 
-  try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 10000);
-    const u = await fetch(`https://api.github.com/users/${user}`, { signal: ctrl.signal }).then(
-      (r) => {
-        if (!r.ok) throw new Error("user " + r.status);
-        return r.json();
-      }
-    );
+        // 获星总数：分页搜索本人全部公开仓库求和（失败不影响其余数据）。
+        // 匿名 search API 单页最多 100 条，仓库 >100 时逐页取，最多 5 页兜底。
+        let stars = 0;
+        try {
+          for (let page = 1; page <= 5; page++) {
+            const s = await fetch(
+              `https://api.github.com/search/repositories?q=user:${user}&per_page=100&page=${page}`,
+              { signal }
+            ).then((r) => (r.ok ? r.json() : null));
+            if (!s || !Array.isArray(s.items) || !s.items.length) break;
+            // 只统计本人仓库（非 fork），fork 来的星属于原作者
+            stars += s.items.filter((r) => !r.fork).reduce((n, r) => n + r.stargazers_count, 0);
+            if (s.items.length < 100) break; // 不足一页说明翻完了
+          }
+        } catch {
+          // 获星数获取失败置 0
+        }
 
-    // 获星总数：分页搜索本人全部公开仓库求和（失败不影响其余数据）。
-    // 匿名 search API 单页最多 100 条，仓库 >100 时逐页取，最多 5 页兜底。
-    let stars = 0;
-    try {
-      for (let page = 1; page <= 5; page++) {
-        const s = await fetch(
-          `https://api.github.com/search/repositories?q=user:${user}+fork:true&per_page=100&page=${page}`,
-          { signal: ctrl.signal }
-        ).then((r) => (r.ok ? r.json() : null));
-        if (!s || !Array.isArray(s.items) || !s.items.length) break;
-        stars += s.items.reduce((n, r) => n + r.stargazers_count, 0);
-        if (s.items.length < 100) break; // 不足一页说明翻完了
-      }
-    } catch {
-      // 获星数获取失败置 0
-    }
-
-    profile.value = {
-      login: u.login,
-      name: u.name,
-      bio: u.bio || "",
-      avatarUrl: u.avatar_url,
-      followers: u.followers,
-      repos: u.public_repos,
-      stars,
-    };
-    try {
-      localStorage.setItem("github_profile_v1", JSON.stringify({ ts: Date.now(), ...profile.value }));
-    } catch {
-      // 存储失败不影响展示
-    }
+        return {
+          login: u.login,
+          name: u.name,
+          bio: u.bio || "",
+          avatarUrl: u.avatar_url,
+          followers: u.followers,
+          repos: u.public_repos,
+          stars,
+        };
+      },
+    });
+    if (p) profile.value = p;
   } catch {
     failed.value = true;
   }

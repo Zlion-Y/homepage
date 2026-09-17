@@ -98,6 +98,19 @@ a {
   text-decoration: none;
 }
 
+/* 键盘焦点可见：全局统一焦点环，仅键盘触发（不影响鼠标点击） */
+:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :focus-visible {
+    outline-offset: 0;
+  }
+}
+
 img {
   display: block;
 }
@@ -138,8 +151,10 @@ img {
   pointer-events: none;
 }
 
-.glass:hover::before {
-  opacity: 1;
+@media (hover: hover) {
+  .glass:hover::before {
+    opacity: 1;
+  }
 }
 
 /* 载入层淡出过渡 */
@@ -158,21 +173,23 @@ img {
   position: relative;
 }
 
-[data-tip]:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(13, 18, 33, 0.92);
-  border: 1px solid var(--border);
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  white-space: nowrap;
-  color: var(--text);
-  pointer-events: none;
-  z-index: 10;
+@media (hover: hover) {
+  [data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(13, 18, 33, 0.92);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    color: var(--text);
+    pointer-events: none;
+    z-index: 10;
+  }
 }
 
 /* 鼠标点击涟漪特效 */

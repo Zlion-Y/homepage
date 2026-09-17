@@ -13,6 +13,7 @@
           tabindex="0"
           @click="enterPanel($event)"
           @keydown.enter="enterPanel($event)"
+          @keydown.space.prevent="enterPanel($event)"
         >
           <LogoBadge :size="58" />
           <h1 class="site-name" :style="{ fontFamily: siteFont.css }"
@@ -82,8 +83,6 @@ const siteFont = computed(() => currentSiteFont());
 const loading = ref(true);
 // 二级「探索更多」面板开关
 const showMore = ref(false);
-// 面板是否已经挂载过：第一次打开才建 DOM，之后常驻（切显示），保证里面的音乐卡不被销毁
-const panelBuilt = ref(false);
 // 返回一级时给主页内容补一次浮起动画（见样式里的 .panel-return）
 const returning = ref(false);
 let returnTimer = null;
@@ -108,9 +107,12 @@ function setPanelAnim(name, ms) {
   panelAnimTimer = setTimeout(() => (panelAnim.value = ""), ms);
 }
 
+let closeTimer = null;
 function closePanel() {
+  clearTimeout(closeTimer);
   setPanelAnim("out", 380);
-  showMore.value = false;
+  // 延迟 380ms 再 display:none，让 anim-out 离场动画播完
+  closeTimer = setTimeout(() => { showMore.value = false; }, 380);
 }
 
 // 点击进入面板：在鼠标位置放一朵小烟花 + 冒一句提示（文案见 config.panelTips）
@@ -118,6 +120,7 @@ const panelTips = Array.isArray(siteConfig.panelTips) ? siteConfig.panelTips.fil
 let panelTipIdx = 0;
 
 function enterPanel(ev) {
+  clearTimeout(closeTimer);
   // 键盘触发时没有坐标，就用入口元素中心
   let x = ev && typeof ev.clientX === "number" ? ev.clientX : null;
   let y = ev && typeof ev.clientY === "number" ? ev.clientY : null;
@@ -140,7 +143,6 @@ function enterPanel(ev) {
 // 面板打开时锁定背景滚动；关闭时给主页补一次"浮起"接住二级卡片的依次沉下
 watch(showMore, (v) => {
   document.body.style.overflow = v ? "hidden" : "";
-  if (v) panelBuilt.value = true;
   if (!v) {
     returning.value = true;
     clearTimeout(returnTimer);

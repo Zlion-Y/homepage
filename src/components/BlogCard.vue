@@ -25,7 +25,7 @@
           {{ p.title }}
         </a>
       </li>
-      <li v-if="!posts.length && failed">
+      <li v-if="!posts.length && failed && blogUrl">
         <a :href="blogUrl" target="_blank" rel="noopener" class="fallback">
           去博客看看 →
         </a>
@@ -37,12 +37,13 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
+import { cachedFetch } from "@/utils/cachedFetch";
 import { socialLinks, siteLinks } from "@/config";
 import Icon from "@/components/Icon.vue";
 
 // RSS 拉取失败时的兜底链接：复用 siteLinks 里配置的博客地址，
 // 换博客域名时只改 config.js 即可，不再硬编码
-const blogUrl = siteLinks.find((s) => s.icon === "blog")?.url ?? "https://blog.example.com/";
+const blogUrl = siteLinks.find((s) => s.icon === "blog")?.url ?? "";
 
 const CACHE_KEY = "blog_posts_cache";
 const CACHE_MS = 30 * 60 * 1000; // 30 分钟
@@ -63,27 +64,17 @@ function parseXml(xml) {
 
 onMounted(async () => {
   try {
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if (cached && Date.now() - cached.ts < CACHE_MS && cached.posts.length) {
-      posts.value = cached.posts;
-      return;
-    }
-  } catch {
-    // 缓存解析失败则正常请求
-  }
-
-  try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 8000);
-    const xml = await fetch("/blog-rss", { signal: ctrl.signal }).then((r) => r.text());
-    const list = parseXml(xml);
-    if (!list.length) throw new Error("empty");
-    posts.value = list;
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), posts: list }));
-    } catch {
-      // 存储失败不影响展示
-    }
+    const data = await cachedFetch({
+      key: CACHE_KEY,
+      ttl: CACHE_MS,
+      loader: async (signal) => {
+        const xml = await fetch("/blog-rss", { signal }).then((r) => r.text());
+        const list = parseXml(xml);
+        return list.length ? list : null;
+      },
+    });
+    if (data) posts.value = data;
+    else failed.value = true;
   } catch {
     failed.value = true;
   }
@@ -128,10 +119,12 @@ onMounted(async () => {
   transition: all 0.3s ease;
 }
 
-.social a:hover {
-  color: var(--text);
-  background: var(--glass-strong);
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .social a:hover {
+    color: var(--text);
+    background: var(--glass-strong);
+    transform: translateY(-2px);
+  }
 }
 
 .posts {

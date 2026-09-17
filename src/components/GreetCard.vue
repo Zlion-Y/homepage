@@ -24,9 +24,10 @@ import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
 import { musicBus } from "@/utils/musicBus";
 
-// 按时段问候
+// 按时段问候：跨时段常开页面也能刷新（挂到每分钟更新的 now）
+const now = ref(new Date());
 const hello = computed(() => {
-  const h = new Date().getHours();
+  const h = now.value.getHours();
   if (h < 5) return "夜深了，注意休息";
   if (h < 9) return "早上好，新的一天加油";
   if (h < 12) return "上午好，保持专注";
@@ -119,7 +120,9 @@ function tick() {
   }
 }
 
+let helloTimer = null;
 onMounted(() => {
+  helloTimer = setInterval(() => (now.value = new Date()), 60000);
   if (typing) {
     kickFollow();
     timer = setTimeout(tick, 3000);
@@ -128,6 +131,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  clearInterval(helloTimer);
   clearTimeout(timer);
   if (rafId) cancelAnimationFrame(rafId);
   window.removeEventListener("resize", onResize);
@@ -189,10 +193,12 @@ onUnmounted(() => {
   transition: all 0.3s ease;
 }
 
-.ga-btn:hover {
-  color: var(--text);
-  background: var(--glass-strong);
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .ga-btn:hover {
+    color: var(--text);
+    background: var(--glass-strong);
+    transform: translateY(-2px);
+  }
 }
 
 .q {

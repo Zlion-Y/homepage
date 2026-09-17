@@ -10,7 +10,7 @@
             <i :style="{ background: aqiColor }"></i>AQI {{ weather.aqi }} {{ weather.aqiCat }}
           </span>
         </p>
-        <p class="meta dim">湿度 {{ weather.humidity }}% · 体感 {{ weather.feels }}° · {{ weather.wind }}</p>
+        <p class="meta dim">湿度 {{ weather.humidity }}{{ typeof weather.humidity === 'number' ? '%' : '' }} · 体感 {{ weather.feels }}{{ typeof weather.feels === 'number' ? '°' : '' }} · {{ weather.wind }}</p>
       </div>
     </div>
     <div class="chart" ref="chartEl" v-if="hasForecast">
@@ -46,6 +46,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { cachedFetch } from "@/utils/cachedFetch";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
 
@@ -124,7 +125,8 @@ const aqiColor = computed(() => {
    注意 x / y 用的都是实测像素尺寸 —— 用户坐标即 CSS px，
    所以标签字号和圆点半径就是它们在样式里写的值，不会被二次缩放。 */
 const points = computed(() => {
-  const days = forecast.value.slice(0, 5);
+  // 过滤掉缺温度的天，避免 Math.min/max 出 NaN 导致曲线消失
+  const days = forecast.value.slice(0, 5).filter((d) => Number.isFinite(d.temp_max) && Number.isFinite(d.temp_min));
   const bw = boxW.value;
   const bh = boxH.value;
   if (days.length < 2 || bw < 2 || bh < 2) return []; // 尺寸还没量到，先不画
@@ -170,17 +172,8 @@ function smoothPath(pts) {
   return d;
 }
 
-onMounted(async () => {
-  // 30 分钟内直接用缓存，避免刷新必发请求
-  try {
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if (cached && Date.now() - cached.ts < CACHE_MS) {
-      apply(cached.data);
-      return;
-    }
-  } catch {
-    // 缓存解析失败则正常请求
-  }
+onMounted(() => {
+  // 30 分钟内直接用缓存，避免刷新必发请求；失败 3s 后重试一次
   load().then((ok) => {
     if (!ok) setTimeout(() => load(), 3000);
   });
@@ -189,21 +182,22 @@ onMounted(async () => {
 async function load() {
   if (weather.value) return true;
   try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 8000);
-    const params = new URLSearchParams({ extended: "true", forecast: "true" });
-    if (siteConfig.weatherCity) params.set("adcode", siteConfig.weatherCity);
-    const data = await fetch(
-      `https://uapis.cn/api/v1/misc/weather?${params}`,
-      { signal: ctrl.signal }
-    ).then((r) => r.json());
-    if (typeof data.temperature !== "number") return false;
+    const data = await cachedFetch({
+      key: CACHE_KEY,
+      ttl: CACHE_MS,
+      loader: async (signal) => {
+        const params = new URLSearchParams({ extended: "true", forecast: "true" });
+        if (siteConfig.weatherCity) params.set("adcode", siteConfig.weatherCity);
+        const d = await fetch(
+          `https://uapis.cn/api/v1/misc/weather?${params}`,
+          { signal }
+        ).then((r) => r.json());
+        // 字段校验：无效数据不进缓存
+        return typeof d.temperature === "number" ? d : null;
+      },
+    });
+    if (!data) return false;
     apply(data);
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-    } catch {
-      // 存储失败不影响展示
-    }
     return true;
   } catch {
     return false;
@@ -211,17 +205,20 @@ async function load() {
 }
 
 function apply(d) {
+  // 字段缺失兜底，避免渲染出 undefined
+  const windDir = d.wind_direction || "";
+  const windPow = d.wind_power || "";
   weather.value = {
-    district: [d.district, d.city, d.province].find((v) => v && !Array.isArray(v)) || "",
-    cond: d.weather,
-    icon: d.weather_icon,
+    district: [d.district, d.city, d.province].find((v) => v && !Array.isArray(v)) || "未知",
+    cond: d.weather || "未知",
+    icon: d.weather_icon || "",
     temp: d.temperature,
-    humidity: d.humidity,
-    feels: d.feels_like,
-    wind: `${d.wind_direction}${d.wind_power}`,
-    aqi: d.aqi,
-    aqiCat: d.aqi_category,
-    aqiLv: d.aqi_level,
+    humidity: d.humidity ?? "—",
+    feels: d.feels_like ?? "—",
+    wind: windDir || windPow ? `${windDir}${windPow}` : "未知",
+    aqi: d.aqi ?? null,
+    aqiCat: d.aqi_category || "",
+    aqiLv: d.aqi_level ?? 1,
   };
   forecast.value = d.forecast || [];
 }

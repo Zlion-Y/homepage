@@ -26,6 +26,7 @@
         </div>
       </a>
     </div>
+    <p v-else-if="noFree" class="tip-text">本周暂无免费游戏</p>
     <p v-else-if="failed" class="tip-text">加载失败，稍后再试</p>
     <p v-else class="tip-text">正在获取限免游戏…</p>
   </div>
@@ -33,34 +34,30 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
+import { cachedFetch } from "@/utils/cachedFetch";
 import Icon from "@/components/Icon.vue";
 
 const games = ref([]);
 const failed = ref(false);
+const noFree = ref(false);
 
 onMounted(async () => {
   try {
-    const cached = JSON.parse(localStorage.getItem("epic_free") || "null");
-    if (cached && Date.now() - cached.ts < 60 * 60 * 1000 && cached.games.length) {
-      games.value = cached.games;
-      return;
-    }
-  } catch {
-    // 缓存解析失败则正常请求
-  }
-
-  try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch("https://uapis.cn/api/v1/game/epic-free", { signal: ctrl.signal }).then((r) => r.json());
-    const free = (res.data || []).filter((g) => g.is_free_now).slice(0, 2);
-    if (!free.length) throw new Error("empty");
-    games.value = free.map((g) => ({ id: g.id, title: g.title, cover: g.cover, price: g.original_price_desc }));
-    try {
-      localStorage.setItem("epic_free", JSON.stringify({ ts: Date.now(), games: games.value }));
-    } catch {
-      // 存储失败不影响展示
-    }
+    const data = await cachedFetch({
+      key: "epic_free",
+      ttl: 60 * 60 * 1000,
+      loader: async (signal) => {
+        const res = await fetch("https://uapis.cn/api/v1/game/epic-free", { signal }).then((r) => r.json());
+        // 字段校验：title/cover 缺失的条目过滤掉，避免裂图/空标题
+        const free = (res.data || []).filter((g) => g.is_free_now && g.title && g.cover).slice(0, 2);
+        // 区分「无免费游戏」（null，不缓存）与「请求失败」（throw）
+        return free.length
+          ? free.map((g) => ({ id: g.id, title: g.title, cover: g.cover, price: g.original_price_desc }))
+          : null;
+      },
+    });
+    if (data) games.value = data;
+    else noFree.value = true;
   } catch {
     failed.value = true;
   }

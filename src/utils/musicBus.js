@@ -18,6 +18,7 @@ function register(c) {
 }
 function unregister() {
   ctrl.value = null;
+  syncPlaying(false); // 音乐卡卸载后复位播放态，避免外层图标残留播放中
 }
 function setOpenPanel(fn) {
   openPanel = fn || null;
@@ -31,13 +32,22 @@ function ensureAnd(action) {
   if (openPanel) openPanel(); // 先打开面板 → MusicCard 挂载注册
   if (!watching) {
     watching = true;
-    watch(ctrl, (v) => {
+    const stop = watch(ctrl, (v) => {
       if (v) {
         watching = false;
+        stop();
         const q = pending.splice(0);
         q.forEach((a) => a());
       }
     });
+    // 5s 超时：ctrl 仍未就绪则清空 pending，避免动作永久滞留
+    setTimeout(() => {
+      if (watching) {
+        watching = false;
+        stop();
+        pending.length = 0;
+      }
+    }, 5000);
   }
 }
 function togglePlay() {

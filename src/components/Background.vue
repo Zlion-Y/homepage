@@ -15,6 +15,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
+import { wallpaperUrl } from "@/utils/wallpaperBus";
 
 // 背景源：配置的随机壁纸 API 优先，否则探测本地 public/images/background.jpg；
 // 都没有/加载失败则保持极光渐变
@@ -76,6 +77,8 @@ onMounted(() => {
     img.onload = () => {
       custom.value = true;
       bgSrcRef.value = url;
+      // 全屏播放器无封面时的背景兜底读这里（E5 解耦），替代 MusicCard 里的 DOM querySelector
+      wallpaperUrl.value = new URL(url, location.href).href;
       // 把"实际展示的那张图"的地址挂到根变量，供二级面板复用。
       // ⚠️必须用 url（模板 :src 绑定的那个）而不是 img.src：探针请求带 r= 随机参数，
       // 与展示用的 URL 不同，用探针地址会让面板铺上另一张随机图，和主页背景对不上。

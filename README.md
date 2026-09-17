@@ -25,6 +25,7 @@
   - GitHub 数据卡（可选）
 - 页脚建站运行天数
 - 自定义圆点光标 + 移动/点击涟漪、卡片悬停 3D 倾斜 + 光泽动效（手感对齐 FluentPlayer 封面）
+- 无障碍：全屏播放器支持 `Esc` 关闭，全局键盘焦点环，图标按钮均带 `aria-label`
 - 移动端自适应、暗色玻璃拟态风格；所有卡片均可在 config.js 中开关与排序
 
 **TODO（计划中）**：
@@ -51,6 +52,20 @@
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Zlion-Y/homepage&project-name=homepage&repository-name=homepage)
 
 > 想绑定自己的域名（如 `home.example.com`）：在 Vercel 项目设置 → **Domains** 中添加，按提示到域名 DNS 处加一条 CNAME 记录指向 `cname.vercel-dns.com` 即可。
+
+### 环境变量（全部可选，零配置即可跑）
+
+函数默认只允许同源调用，不配任何东西也能正常工作。需要进阶行为时，在 Vercel 项目设置 → **Environment Variables** 里配置：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `API_TOKEN` | 未设置 | 设置后 `/api/health`、`/api/url` 需带 `?token=xxx` 或 `Authorization: Bearer xxx` 访问 |
+| `ALLOW_ORIGINS` | 仅同源 | 允许跨站调用（逗号分隔的完整 Origin，如 `https://a.com,https://b.com`） |
+| `ALLOW_NO_ORIGIN` | `0` | 设为 `1` 时放行无 Origin/Referer 的请求（curl 自检等场景） |
+| `QUALITY` | `320k` | 音质档位（128k / 320k / flac / flac24bit） |
+| `URL_CACHE_SECONDS` | `900` | 直链解析结果的 CDN 边缘缓存秒数，命中缓存不进函数 |
+| `VERIFY` | 开启 | 设为 `off` 跳过直链探活（更快但可能返回死链） |
+| `SOURCE_URLS` | 未设置 | 远端音源脚本地址（逗号分隔），改脚本不用重新部署 |
 
 ### 本地开发部署
 
@@ -150,8 +165,15 @@ musicQuality: "320k",    // 128k / 320k / flac / flac24bit
 
 启用 `"proxy"` 需要自备音源脚本：放 [`sources/`](sources/README.md)（仓库只带示例脚本，**真实音源请自行准备**，
 参考 [lxmusic-](https://github.com/guoyue2010/lxmusic-)），或配 `SOURCE_URLS` 环境变量指向在线脚本——
-改了远端脚本后不用重新部署，打开 `https://你的域名/api/health?refresh=1` 即可让函数立刻重装全部音源。
-部署后打开 `https://你的域名/api/health` 能看到装上了哪些音源、各自的平台与失败原因。
+改了远端脚本后不用重新部署，打开 `https://你的域名/api/health?refresh=1` 即可让函数立刻重装全部音源
+（接口有访问控制，见下，建议配好 `API_TOKEN` 后带 `?token=` 调用）。
+
+> **接口访问控制**：`/api/health`、`/api/url` 已加同源校验——页面内的调用（自动带本站 Referer）直接放行；
+> 在浏览器地址栏直接打开 `https://你的域名/api/health` 没有 Referer，会得到 403。自检方法二选一：
+> `curl -H "Referer: https://你的域名" https://你的域名/api/health`，或配置 `API_TOKEN` 环境变量后
+> 用 `https://你的域名/api/health?token=你的token` 访问。`?refresh=1` 会强制重装音源，务必配合 token 使用。
+
+部署后按上面的方式打开 `/api/health` 能看到装上了哪些音源、各自的平台与失败原因。
 
 ### 站点监控卡
 

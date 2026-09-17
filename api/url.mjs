@@ -17,6 +17,10 @@ import { corsHeaders, json, tokenOK } from '../lib/http.mjs'
 // 函数配置一律写在 vercel.json 的 functions 段里（已配 maxDuration / includeFiles）。
 
 const QUALITY = ['128k', '320k', 'flac', 'flac24bit']
+// source 白名单：防止任意字符串传到 hostsFor 造成资源探测/异常
+const SOURCES = ['wy', 'kw', 'kg', 'qq', 'xm', 'mg']
+// 单参数最大长度：id/hash 等通常很短，限 256 防超长注入
+const MAX_PARAM = 256
 
 export async function GET(request) {
   const cors = corsHeaders(request)
@@ -28,14 +32,25 @@ export async function GET(request) {
   }
 
   const source = (url.searchParams.get('source') || 'wy').trim()
+  if (!SOURCES.includes(source)) {
+    return json({ code: 1, msg: `不支持的 source: ${source}` }, { status: 400, extra: cors })
+  }
   let quality = (url.searchParams.get('quality') || process.env.QUALITY || '320k').trim()
   if (!QUALITY.includes(quality)) quality = '320k'
 
   // 各平台 id 字段不同，宿主把能给的都给上，脚本自己挑（与 Go 版一致）
   const musicInfo = {}
   for (const k of ['id', 'songmid', 'hash', 'rid', 'name', 'singer', 'albumId', 'albumName', 'duration', 'interval']) {
-    const v = url.searchParams.get(k)
-    if (v != null && v !== '') musicInfo[k] = v
+    let v = url.searchParams.get(k)
+    if (v == null || v === '') continue
+    if (v.length > MAX_PARAM) {
+      return json({ code: 1, msg: `参数 ${k} 过长` }, { status: 400, extra: cors })
+    }
+    // C2：数值参数做格式校验（id 纯数字），防异常值穿透进音源脚本
+    if (k === 'id' && !/^\d{1,19}$/.test(v)) {
+      return json({ code: 1, msg: '参数 id 必须是数字' }, { status: 400, extra: cors })
+    }
+    musicInfo[k] = v
   }
   if (Object.keys(musicInfo).length === 0) {
     return json({ code: 1, msg: '缺少 id / songmid / hash / rid' }, { status: 400, extra: cors })
@@ -59,25 +74,46 @@ export async function GET(request) {
 
     let link = String(r.value || '').trim()
     if (!link) throw new Error('音源返回空直链')
-    link = link.replace(/^http:\/\//i, 'https://')
+    const rawLink = link
+    const wasHttp = /^http:\/\//i.test(link)
+    link = wasHttp ? 'https://' + link.slice(7) : link
 
     if (process.env.VERIFY !== 'off') {
-      try {
-        await verifyDirectLink(link)
-      } catch (e) {
-        return json(
-          { code: 1, msg: '直链校验未通过：' + e.message, source, via: r.via, tries: r.tries },
-          { status: 502, extra: cors }
+      // 探活三态：ok=可用 / soft=5xx 或超时（上游抖动，直链仍可信，放行）/ fail=硬失败
+      const probe = async (u) => {
+        try {
+          await verifyDirectLink(u)
+          return 'ok'
+        } catch (e) {
+          return e.hard === false ? 'soft' : 'fail'
+        }
+      }
+      let st = await probe(link)
+      // B16：https 探活硬失败时回退探测原始 http 直链（部分平台 CDN 只有 http 可达）
+      if (st === 'fail' && wasHttp) {
+        const st2 = await probe(rawLink)
+        if (st2 !== 'fail') {
+          st = st2
+          link = rawLink
+        }
+      }
+      if (st === 'fail') {
+        // 细节只进 Runtime Logs，不对外暴露 via/tries（C4）
+        console.warn(
+          `[verify] 直链校验未通过 source=${source} via=${r.via} tries=${(r.tries || []).length} url=${link}`
         )
+        return json({ code: 1, msg: '直链校验未通过', source }, { status: 502, extra: cors })
       }
     }
 
     return json(
-      { code: 0, source, quality, url: link, via: r.via, ms: r.ms, tries: r.tries },
+      // C4：对外只保留泛化字段，via/tries/ms 等实现细节不再下发
+      { code: 0, source, quality, url: link },
       { maxAge: Number(process.env.URL_CACHE_SECONDS || 900), extra: cors }
     )
   } catch (e) {
-    return json({ code: 1, msg: String(e.message || e), tries: e.tries || [] }, { status: 502, extra: cors })
+    console.error('[url] 解析失败:', e && e.message) // 细节进日志（C4）
+    return json({ code: 1, msg: '解析失败' }, { status: 502, extra: cors })
   }
 }
 

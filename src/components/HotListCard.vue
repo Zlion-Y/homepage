@@ -34,6 +34,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { cachedFetch } from "@/utils/cachedFetch";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
 
@@ -71,27 +72,17 @@ function formatHot(v) {
 }
 
 async function fetchBoard(key) {
-  const cacheKey = `hotboard_${key}`;
-  try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
-    if (cached && Date.now() - cached.ts < CACHE_MS && cached.list.length) {
-      return cached;
-    }
-  } catch {
-    // 缓存解析失败则正常请求
-  }
-  const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), 8000);
-  const res = await fetch(`https://uapis.cn/api/v1/misc/hotboard?type=${key}`, {
-    signal: ctrl.signal,
-  }).then((r) => r.json());
-  if (!res.list?.length) throw new Error("empty");
-  const data = { ts: Date.now(), list: res.list.slice(0, 12), updateTime: formatTime(res.update_time || "") };
-  try {
-    localStorage.setItem(cacheKey, JSON.stringify(data));
-  } catch {
-    // 存储失败不影响展示
-  }
+  // 30 分钟缓存：切平台/刷新不重复打接口
+  const data = await cachedFetch({
+    key: `hotboard_${key}`,
+    ttl: CACHE_MS,
+    loader: async (signal) => {
+      const res = await fetch(`https://uapis.cn/api/v1/misc/hotboard?type=${key}`, { signal }).then((r) => r.json());
+      if (!res.list?.length) return null;
+      return { list: res.list.slice(0, 12), updateTime: formatTime(res.update_time || "") };
+    },
+  });
+  if (!data) throw new Error("empty");
   return data;
 }
 

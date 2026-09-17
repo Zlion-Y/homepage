@@ -17,6 +17,7 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
+import { cachedFetch } from "@/utils/cachedFetch";
 import Icon from "@/components/Icon.vue";
 
 const news = ref([]);
@@ -28,27 +29,21 @@ onMounted(async () => {
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   try {
-    const cached = JSON.parse(localStorage.getItem("news_60s") || "null");
-    if (cached && cached.date === today && cached.news.length) {
-      news.value = cached.news;
-      date.value = cached.date;
-      return;
-    }
-  } catch {
-    // 缓存解析失败则正常请求
-  }
-
-  try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 10000);
-    const res = await fetch("https://60s.viki.moe/v2/60s", { signal: ctrl.signal }).then((r) => r.json());
-    if (res.code !== 200 || !res.data?.news?.length) throw new Error("empty");
-    news.value = res.data.news;
-    date.value = res.data.date || today;
-    try {
-      localStorage.setItem("news_60s", JSON.stringify({ date: date.value, news: news.value }));
-    } catch {
-      // 存储失败不影响展示
+    const data = await cachedFetch({
+      key: "news_60s",
+      timeout: 10000,
+      isFresh: (c) => c.data.news?.length && c.data.date === today,
+      loader: async (signal) => {
+        const res = await fetch("https://60s.viki.moe/v2/60s", { signal }).then((r) => r.json());
+        if (res.code !== 200 || !res.data?.news?.length) return null;
+        return { date: res.data.date || today, news: res.data.news };
+      },
+    });
+    if (data) {
+      news.value = data.news;
+      date.value = data.date;
+    } else {
+      failed.value = true;
     }
   } catch {
     failed.value = true;

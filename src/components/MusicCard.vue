@@ -27,7 +27,7 @@
           <div class="info-l1">
             <h3 class="title" :title="track.name">{{ track.name || "音乐" }}</h3>
             <div class="info-btns">
-              <button class="btn-fs" title="全屏播放" @click="openFs">
+              <button class="btn-fs" title="全屏播放" aria-label="全屏播放" @click="openFs">
                 <Icon name="maximize" :size="16" />
               </button>
             </div>
@@ -36,7 +36,7 @@
         <div class="time-vol">
           <span class="time">{{ fmt(currentTime) }} / {{ fmt(duration) }}</span>
           <div class="vol">
-            <button class="btn-mute" title="音量" @click="toggleMute">
+            <button class="btn-mute" title="音量" aria-label="音量" @click="toggleMute">
               <Icon :name="isMuted || volume === 0 ? 'volume-x' : 'volume-2'" :size="16" />
             </button>
             <div class="vol-track" @click="setVol">
@@ -57,19 +57,19 @@
 
     <!-- Controls -->
     <div class="controls">
-      <button class="btn-mode" :class="{ on: playMode !== 0 }" title="播放模式" @click="cycleMode">
+      <button class="btn-mode" :class="{ on: playMode !== 0 }" title="播放模式" aria-label="播放模式" @click="cycleMode">
         <Icon :name="modeIcon" :size="19" />
       </button>
-      <button class="btn-skip" title="上一首" @click="prev()">
+      <button class="btn-skip" title="上一首" aria-label="上一首" @click="prev()">
         <Icon name="skip-back" :size="27" />
       </button>
-      <button class="btn-play" :title="playing ? '暂停' : '播放'" @click="togglePlay">
+      <button class="btn-play" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" @click="togglePlay">
         <Icon :name="playing ? 'pause' : 'play'" :size="27" />
       </button>
-      <button class="btn-skip" title="下一首" @click="next()">
+      <button class="btn-skip" title="下一首" aria-label="下一首" @click="next()">
         <Icon name="skip-forward" :size="27" />
       </button>
-      <button class="btn-drawer" :class="{ on: lrcOpen }" title="歌词" @click="toggleLrc">
+      <button class="btn-drawer" :class="{ on: lrcOpen }" title="歌词" aria-label="歌词" @click="toggleLrc">
         <Icon name="subtitles" :size="19" />
       </button>
     </div>
@@ -165,10 +165,10 @@
           <div class="fs-grad-2" :style="fsGradStyle2"></div>
           <div class="fs-shade"></div>
 <div class="fs-sheet" ref="fsSheet">
-              <button class="fs-close" data-tip="⤵ 退出全屏" @click="closeFs">
+              <button class="fs-close" data-tip="⤵ 退出全屏" aria-label="退出全屏" @click="closeFs">
                 <Icon name="chevron-down" :size="22" />
               </button>
-              <button class="fs-fullscreen" data-tip="⛶ 全屏" @click="toggleFullscreen">
+              <button class="fs-fullscreen" data-tip="⛶ 全屏" aria-label="全屏" @click="toggleFullscreen">
                 <Icon name="maximize" :size="16" />
               </button>
               <div class="fs-handle" @click="closeFs" @touchstart="fsDragStart" @touchmove="fsDragMove" @touchend="fsDragEnd">
@@ -199,7 +199,7 @@
                 </div>
                 <!-- 歌词 / 播放列表（桌面端右侧栏；移动端覆盖封面视图） -->
                 <div class="fs-side">
-                  <div v-show="fsView === 'lyrics'" class="fs-lrc" ref="fsLrcEl">
+                  <div v-show="fsView === 'lyrics'" class="fs-lrc" ref="fsLrcEl" @scroll="onFsLrcScroll">
                     <div
                       v-for="(line, i) in lyrics"
                       :key="i"
@@ -268,20 +268,20 @@
                   <span class="ft-artist">{{ track.artist || "未在播放" }}</span>
                 </div>
                 <div class="fs-controls">
-                  <button class="fs-side-btn" :title="fsModeTitle" @click="cycleMode">
+                  <button class="fs-side-btn" :title="fsModeTitle" :aria-label="fsModeTitle" @click="cycleMode">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path :d="fsModeIcon" /></svg>
                   </button>
-                  <button class="fs-control-btn" title="上一首" @click="prev()">
+                  <button class="fs-control-btn" title="上一首" aria-label="上一首" @click="prev()">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z" /></svg>
                   </button>
-                  <button class="fs-play-btn" :title="playing ? '暂停' : '播放'" @click="togglePlay">
+                  <button class="fs-play-btn" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" @click="togglePlay">
                     <svg v-if="playing" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
                     <svg v-else viewBox="0 0 24 24" fill="currentColor"><path d="M8.3 5v14l11-7z" /></svg>
                   </button>
-                  <button class="fs-control-btn" title="下一首" @click="next()">
+                  <button class="fs-control-btn" title="下一首" aria-label="下一首" @click="next()">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
                   </button>
-                  <button class="fs-side-btn" title="播放列表" @click="fsToggleView('queue')">
+                  <button class="fs-side-btn" title="播放列表" aria-label="播放列表" @click="fsToggleView('queue')">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z" /></svg>
                   </button>
                 </div>
@@ -299,6 +299,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { siteConfig } from "@/config";
+import { wallpaperUrl } from "@/utils/wallpaperBus";
 import Icon from "@/components/Icon.vue";
 import LogoBadge from "@/components/LogoBadge.vue";
 import { musicBus } from "@/utils/musicBus";
@@ -363,18 +364,22 @@ async function resolveFsCover() {
     return;
   }
   const base = hdCover(t.pic);
-  const cached = fsCoverCache.get(t.name);
+  // 缓存 key 用歌曲 ID（拿不到时回退 url/name），避免同名不同曲（Live/伴奏版）串封面/主色
+  const covKey = songIdOf(t) || t.url || t.name;
+  const cached = fsCoverCache.get(covKey);
   if (cached) {
     fsCoverSrc.value = cached;
+    resolveDominantColor(covKey, smallCover(cached), t); // 命中也需恢复主色
+    syncBgShown();
     return;
   }
 
   // 批量详情已解析出官方直链（按歌曲 ID 精确匹配）：直接升到 1024，无需再按名字搜
   if (/music\.126\.net/.test(t.pic)) {
     const hd = neteasePic(t.pic, "1024y1024");
-    fsCoverCache.set(t.name, hd);
+    fsCoverCache.set(covKey, hd);
     fsCoverSrc.value = hd;
-    resolveDominantColor(t.name, neteasePic(hd, "64y64")); // 采样专用小图
+    resolveDominantColor(covKey, neteasePic(hd, "64y64"), t); // 采样专用小图
     syncBgShown();
     return;
   }
@@ -396,10 +401,10 @@ async function resolveFsCover() {
       const pic = detail?.album?.picUrl;
       if (!pic) continue;
       const hd = pic.replace(/^http:\/\//i, "https://") + "?param=1024y1024";
-      fsCoverCache.set(t.name, hd);
+      fsCoverCache.set(covKey, hd);
       if (track.value === t) {
         fsCoverSrc.value = hd;
-        resolveDominantColor(t.name, smallCover(hd));
+        resolveDominantColor(covKey, smallCover(hd), t);
         syncBgShown();
       }
       done = true;
@@ -412,7 +417,7 @@ async function resolveFsCover() {
   // 官方拿不到（搜不到专辑/接口异常）：回落播放列表自带封面，保证全屏有封面与背景
   if (!done && track.value === t) {
     fsCoverSrc.value = base;
-    resolveDominantColor(t.name, smallCover(base));
+    resolveDominantColor(covKey, smallCover(base), t);
     syncBgShown();
   }
 }
@@ -446,6 +451,11 @@ function closeFs() {
   document.body.style.overflow = fsPrevBodyOverflow;
 }
 
+// E6 可访问性：Esc 关闭全屏（键盘退出，不依赖鼠标）
+function onFsEsc(e) {
+  if (e.key === "Escape" && fsOpen.value) closeFs();
+}
+
 // 全屏播放层整屏不透明（#0a0a0a + 整屏色洗），所以它盖住的主页与二级面板没必要继续合成。
 // 播放层是 Teleport 到 body 的，因此隐藏那两层不会连带把播放层自己藏掉（规则见文件末尾的全局样式块）。
 function syncCovered() {
@@ -471,14 +481,14 @@ function rgbToHsl(r, g, b) {
   return { h: h * 360, s: sat, l };
 }
 
-async function resolveDominantColor(name, pic) {
+async function resolveDominantColor(name, pic, t) {
   if (!pic) {
-    fsDominant.value = null;
+    if (track.value === t) fsDominant.value = null;
     return;
   }
   const cached = fsDominantCache.get(name);
   if (cached) {
-    fsDominant.value = cached;
+    if (track.value === t) fsDominant.value = cached;
     return;
   }
   const color = await new Promise((resolve) => {
@@ -513,7 +523,7 @@ async function resolveDominantColor(name, pic) {
     img.src = pic;
   });
   if (color) fsDominantCache.set(name, color);
-  fsDominant.value = color;
+  if (!t || track.value === t) fsDominant.value = color; // 快速切歌时丢弃过期取色
 }
 
 // 主色可用化：饱和度提上来、亮度压到中间调，任何封面都成一块有存在感的底色
@@ -557,11 +567,11 @@ const musicAccent = computed(() => {
   return `hsl(${c.h.toFixed(0)} ${(sat * 100).toFixed(0)}% ${(lum * 100).toFixed(0)}%)`;
 });
 
-// 当前站点壁纸：优先复用页面已加载的图，其次配置的随机壁纸接口，最后本地图
+// 当前站点壁纸：优先复用页面已加载的图（wallpaperBus 注入），其次配置的随机壁纸接口，最后本地图
 function currentWallpaper() {
-  const el = document.querySelector("img.custom");
-  if (el && el.naturalWidth > 0) return el.src;
-  return siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
+  return (
+    wallpaperUrl.value || siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`
+  );
 }
 // 全屏背景源：封面取 300，再由 .fs-bg-img 的 blur(44px) 糊开成氛围底色。
 // ⚠️ 曾经为了省渲染把这里降到 32 并去掉那层模糊（「双线性放大本身就是模糊」）——已回退，别再这么做：
@@ -580,7 +590,12 @@ const cardCoverSrc = computed(() => neteasePic(track.value.pic || fsCoverSrc.val
 
 // 封面加载失败：退回占位（Logo）+ 壁纸兜底背景
 function onFsCoverError() {
-  fsCoverSrc.value = "";
+  const t = track.value;
+  const covKey = songIdOf(t) || (t && t.url) || (t && t.name);
+  // 删掉坏缓存，下次不再命中；回落播放列表自带封面（若有）
+  if (covKey) fsCoverCache.delete(covKey);
+  const base = t && t.pic ? hdCover(t.pic) : "";
+  fsCoverSrc.value = base;
   fsDominant.value = null;
 }
 
@@ -696,6 +711,7 @@ function fsLrcFollow(instant) {
   const line = el.children[lrcIndex.value];
   if (!line) return;
   const target = line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2;
+  fsProgUntil = performance.now() + (instant ? 300 : 900);
   if (instant) {
     el.scrollTo({ top: target, behavior: "auto" });
   } else {
@@ -704,7 +720,7 @@ function fsLrcFollow(instant) {
 }
 
 watch(lrcIndex, () => {
-  if (fsOpen.value && fsView.value === "lyrics") fsLrcFollow(false);
+  if (fsOpen.value && fsView.value === "lyrics" && !fsIsUserScrolling) fsLrcFollow(false);
 });
 watch(fsView, (v) => {
   if (v === "lyrics") nextTick(() => fsLrcFollow(true));
@@ -822,6 +838,10 @@ watch(
 
 let isUserScrolling = false;
 let scrollTimeout = null;
+// 全屏歌词用户滚动抑制（仿小卡方案）：用户上翻后暂停自动跟随，3s 后回正
+let fsIsUserScrolling = false;
+let fsScrollTimeout = null;
+let fsProgUntil = 0;
 
 const track = computed(() => playlist.value[index.value] || { name: "音乐", artist: "未在播放" });
 const pct = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0));
@@ -889,8 +909,10 @@ let winnerApi = 0; // 本轮竞速胜出的源；单曲降级链优先复用它
 // 三源并发竞速：谁先返回有效歌单用谁（串行最坏要等 3×超时，并发只需最快那家）
 async function fetchPlaylistAll() {
   const id = siteConfig.musicPlaylist;
+  const ctrls = [];
   const tryOne = async (api, i) => {
     const ctrl = new AbortController();
+    ctrls.push(ctrl);
     setTimeout(() => ctrl.abort(), 4000);
     const url = api.replace(":id", id).replace(":r", String(Math.random()));
     const data = await fetch(url, { signal: ctrl.signal }).then((r) => r.json());
@@ -903,18 +925,31 @@ async function fetchPlaylistAll() {
         url: (item.url || "").replace(/^http:\/\//i, "https://"),
         pic: (item.pic || item.cover || "").replace(/^http:\/\//i, "https://"),
         lrc: item.lrc || "",
+        id: item.id || "",
       }))
       .filter((t) => t.url);
     if (!tracks.length) throw new Error("no urls");
-    winnerApi = i;
-    return tracks;
+    return { tracks, i };
   };
-  return Promise.any(APIS.map((api, i) => tryOne(api, i)));
+  try {
+    const { tracks, i } = await Promise.any(APIS.map((api, i) => tryOne(api, i)));
+    winnerApi = i; // 只由真正胜出的源写入，避免慢源覆盖快源
+    return tracks;
+  } finally {
+    ctrls.forEach((c) => c.abort()); // 胜出后取消其余源，不浪费带宽
+  }
 }
 
-// 歌曲 ID（从音源链接提取）→ 官方歌曲详情批量换高清封面
+// 歌曲 ID → proxy 解析直链 / 官方歌曲详情批量换高清封面
+// 优先级：音源返回的 id 字段 > URL ?id= 参数 > 网易 CDN 直链路径中的文件名（即歌曲 ID）
 function songIdOf(t) {
-  const m = (t.url || "").match(/[?&]id=(\d+)/);
+  if (!t) return "";
+  if (t.id) return String(t.id);
+  const u = t.url || "";
+  let m = u.match(/[?&]id=(\d+)/);
+  if (m) return m[1];
+  // 网易 CDN 直链：…/YYYYMMDDHHMMSS/md5/SONGID.mp3（文件名即歌曲 ID）
+  m = u.match(/\/(\d+)\.(mp3|m4a|flac|aac|wav|ogg)(\?|#|$)/i);
   return m ? m[1] : "";
 }
 function neteasePic(picUrl, size) {
@@ -989,6 +1024,7 @@ const playlistReady = (async () => {
 // ── Lyrics ───────────────────────────────────────────────
 // 歌词缓存：内存 + localStorage（按歌词地址），二次播放/切回秒出
 const lrcMem = new Map();
+let lrcAbort = null; // 当前歌词请求的 AbortController，切歌时中止旧请求
 function lrcCacheKey(url) {
   return "lrc_" + url.slice(-64);
 }
@@ -1027,7 +1063,11 @@ function loadLyrics(t) {
     // 读取失败则走网络
   }
 
-  fetch(t.lrc)
+  // 切歌时中止上一首还在飞的歌词请求，避免晚到的响应覆盖当前歌词
+  if (lrcAbort) lrcAbort.abort();
+  lrcAbort = new AbortController();
+  const lrcTimer = setTimeout(() => lrcAbort && lrcAbort.abort(), 8000);
+  fetch(t.lrc, { signal: lrcAbort.signal })
     .then((r) => r.text())
     .then((text) => {
       if (text) {
@@ -1040,7 +1080,8 @@ function loadLyrics(t) {
       }
       applyLrcText(t, text);
     })
-    .catch(() => (lyrics.value = []));
+    .catch(() => { /* 被中止或失败：保持空歌词，不覆盖 */ })
+    .finally(() => clearTimeout(lrcTimer));
 }
 
 // 后台预取下一首歌词，切歌时即刻可用
@@ -1131,6 +1172,7 @@ function proxyEnabled() {
 // 同一首歌的解析结果记一小会儿：换歌来回切时不用反复问（服务端本来也有 15 分钟 CDN 缓存）
 const proxyMemo = new Map();
 const PROXY_MEMO_MS = 10 * 60 * 1000;
+const PROXY_FAIL_MS = 30 * 1000; // 负缓存：解析失败后短时间内不再重试
 
 // 超时给 5 秒：函数冷启动时要装载全部音源脚本（实测约 1 秒）再解析，
 // 3 秒会在冷启动那次超时、白白退回 Meting。解析发生在预载阶段，用户点播放前通常已就绪。
@@ -1139,7 +1181,10 @@ async function resolveProxyUrl(t, ms = 5000) {
   const id = songIdOf(t);
   if (!id) return "";
   const hit = proxyMemo.get(id);
-  if (hit && Date.now() - hit.at < PROXY_MEMO_MS) return hit.url;
+  if (hit) {
+    const ttl = hit.fail ? PROXY_FAIL_MS : PROXY_MEMO_MS;
+    if (Date.now() - hit.at < ttl) return hit.url; // 正缓存返直链，负缓存返空串
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
@@ -1159,6 +1204,7 @@ async function resolveProxyUrl(t, ms = 5000) {
       proxyWarned = true;
       console.warn("[music] 音源解析失败，已退回 Meting：", e && e.message, "（打开 /api/health 看音源装载情况）");
     }
+    proxyMemo.set(id, { url: "", at: Date.now(), fail: true });
     return "";
   } finally {
     clearTimeout(timer);
@@ -1273,7 +1319,8 @@ function prefetchWinnerFor(i) {
 // 后台探活下一首（顺序模式的下一曲）候选源：切歌时命中 direct 复用，减少静音空档
 function prefetchNextTrack() {
   const n = playlist.value.length;
-  if (prefetchOn || n < 2) return;
+  // 随机模式下下一首不可预知，预取命中率≈1/n 纯耗流量，跳过
+  if (prefetchOn || n < 2 || playMode.value === 2) return;
   const idx = (index.value + 1) % n;
   if (prefetchMemo && prefetchMemo.index === idx && Date.now() - prefetchMemo.at < 5 * 60 * 1000) return;
   const nt = playlist.value[idx];
@@ -1378,6 +1425,7 @@ function onAudioError() {
   const ver = loadVersion;
   if (trackUrlIdx < trackUrls.length - 1) {
     trackUrlIdx++;
+    lastErrAt = 0; // 换新源，去重计时清零，避免新源快速报错被吞
     playCurrentUrl(true, ver);
   } else {
     playing.value = false;
@@ -1400,6 +1448,8 @@ let errTipTimer = null;
 function showErrTip(msg, ms = 2600) {
   errTip.value = msg;
   if (errTipTimer) clearTimeout(errTipTimer);
+  if (errorSkipTimer) clearTimeout(errorSkipTimer);
+  clearLoadTimer();
   if (!ms) return; // ms=0：常驻提示，不自动清除
   errTipTimer = setTimeout(() => (errTip.value = ""), ms);
 }
@@ -1445,7 +1495,10 @@ function next(auto = false) {
     const audio = audioEl.value;
     if (audio) {
       audio.currentTime = 0;
-      audio.play();
+      audio.play().catch(() => {
+        // 重播失败（源已失效）：走降级链换下一首
+        onAudioError();
+      });
     }
     return;
   }
@@ -1539,8 +1592,20 @@ function onUserLrcScroll() {
   resetScrollTimeout();
 }
 
+// 全屏歌词：用户手动滚动后暂停自动跟随 3 秒，再回正到当前句
+function onFsLrcScroll() {
+  if (performance.now() < fsProgUntil) return;
+  fsIsUserScrolling = true;
+  clearTimeout(fsScrollTimeout);
+  fsScrollTimeout = setTimeout(() => {
+    fsIsUserScrolling = false;
+    if (fsOpen.value && fsView.value === "lyrics" && lrcIndex.value !== -1) fsLrcFollow(false);
+  }, 3000);
+}
+
 onMounted(async () => {
   musicBus.register({ togglePlay, openFs });
+  window.addEventListener("keydown", onFsEsc);
   bindMediaSession();
   watch(playing, (v) => {
     musicBus.syncPlaying(v);
@@ -1584,12 +1649,10 @@ function bindMediaSession() {
     ms.setActionHandler("pause", () => togglePlay());
     ms.setActionHandler("previoustrack", () => prev());
     ms.setActionHandler("nexttrack", () => next(false));
-    if (ms.setActionHandler("seekto")) {
-      ms.setActionHandler("seekto", (d) => {
-        const a = audioEl.value;
-        if (a && d && d.seekTime != null) a.currentTime = d.seekTime;
-      });
-    }
+    ms.setActionHandler("seekto", (d) => {
+      const a = audioEl.value;
+      if (a && d && d.seekTime != null) a.currentTime = d.seekTime;
+    });
   } catch {
     // 不支持的动作或被禁用时静默跳过
   }
@@ -1628,10 +1691,15 @@ function failedLoad() {
 
 onUnmounted(() => {
   musicBus.unregister();
+  window.removeEventListener("keydown", onFsEsc);
   audioEl.value?.pause();
   plList.stop();
   fsQList.stop();
+  if (lrcAbort) lrcAbort.abort();
+  clearLoadTimer();
+  if (errorSkipTimer) clearTimeout(errorSkipTimer);
   clearTimeout(scrollTimeout);
+  if (fsScrollTimeout) clearTimeout(fsScrollTimeout);
   if (errTipTimer) clearTimeout(errTipTimer);
   if (fsOpen.value) document.body.style.overflow = fsPrevBodyOverflow;
   document.body.classList.remove("fs-open");
@@ -2031,10 +2099,12 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-/* 鼠标移入歌词区：取消其他行的模糊，方便预览/点歌 */
-.lrc-container:hover .lrc-line {
-  filter: none;
-  opacity: 1;
+/* 鼠标移入歌词区：取消其他行的模糊，方便预览/点歌。仅限支持 hover 的设备，避免触屏粘滞 */
+@media (hover: hover) {
+  .lrc-container:hover .lrc-line {
+    filter: none;
+    opacity: 1;
+  }
 }
 
 .lrc-empty {
@@ -2462,10 +2532,14 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-/* 鼠标移入全屏歌词区：取消其他行的模糊，方便预览/点歌 */
-.fs-lrc:hover .fs-lrc-line {
-  filter: none;
-  opacity: 1;
+/* 鼠标移入全屏歌词区：取消其他行的模糊，方便预览/点歌。
+   仅限真正支持 hover 的设备：触屏上点击会让 :hover 粘住不掉，
+   若不加限定会把这些行的模糊/强调态全取消，移动端“模糊丢失”。 */
+@media (hover: hover) {
+  .fs-lrc:hover .fs-lrc-line {
+    filter: none;
+    opacity: 1;
+  }
 }
 
 /* 手机端竖排：封面在歌词尚未滚动时四周太空。实测 390×844：封面只有 210px 宽

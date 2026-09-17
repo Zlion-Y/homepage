@@ -7,8 +7,14 @@
  * 带上该参数即可让 warm 实例立刻重新拉取，无需等冷启动。
  */
 import { status, refresh } from '../lib/registry.mjs'
+import { corsHeaders, json, tokenOK } from '../lib/http.mjs'
 
 export async function GET(request) {
+  const cors = corsHeaders(request)
+  if (!cors) return json({ code: 403, msg: '来源不在白名单' }, { status: 403 })
+  if (!tokenOK(request, new URL(request.url))) {
+    return json({ code: 401, msg: '需要 token' }, { status: 401, extra: cors })
+  }
   const wantRefresh = new URL(request.url).searchParams.get('refresh') === '1'
   const s = wantRefresh ? await refresh() : await status()
   if (wantRefresh) {
@@ -29,6 +35,12 @@ export async function GET(request) {
       null,
       2
     ),
-    { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } }
+    { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } }
   )
+}
+
+export async function OPTIONS(request) {
+  const cors = corsHeaders(request)
+  if (!cors) return new Response(null, { status: 403 })
+  return new Response(null, { status: 204, headers: cors })
 }
