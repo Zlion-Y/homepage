@@ -191,7 +191,8 @@
 - 歌词同步滚动居中，点歌词行跳转进度
 - **洛雪音源解析**（serverless 函数，内置可选，随本仓库部署在 Vercel，见下）
 
-#### 洛雪音源解析（serverless，内置可选）
+<details>
+<summary><b>洛雪音源解析（serverless，内置可选）</b> —— 默认走公共 Meting；启用自带解析、接口速查与音源优先级说明都在这里</summary>
 
 公共 Meting 接口对 VIP / 版权受限曲目拿不到可播放直链。本仓库自带一份 **serverless 版的洛雪音源解析**
 （`api/` + `lib/`，跟主页一起部署在 Vercel），把洛雪（LX Music）自定义音源脚本跑在函数里。
@@ -314,6 +315,8 @@ curl -s -H "Referer: https://你的域名" "https://你的域名/api/url?id=2873
 
 > 这套解析依赖 Node 运行时（用 `node:vm` 跑音源脚本、直读 `sources/` 目录、请求期可用 `new Function`），
 > **换成 Cloudflare / EdgeOne 的边缘函数会失效**——原因与实测结论见[「部署到纯静态平台」](#部署到纯静态平台cloudflare-pages--edgeone-makers-等)一节。
+
+</details>
 
 ### 站点监控卡
 
