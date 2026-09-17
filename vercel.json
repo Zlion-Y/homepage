@@ -12,13 +12,13 @@
   ],
   "headers": [
     {
-      "source": "/font/(*)",
+      "source": "/font/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/images/(*)",
+      "source": "/images/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
