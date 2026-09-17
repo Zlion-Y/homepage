@@ -147,7 +147,7 @@
       <!-- 被盖住的两层（主页 / 二级面板）的隐藏时机挂在 after-enter / before-leave 上：
            进场时播放层还是半透明带位移的，那一瞬间就把下层藏掉会看到"面板提前消失" -->
       <Transition name="fs" @after-enter="syncCovered" @before-leave="syncCovered">
-        <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop }" :style="{ &quot;--music-accent&quot;: musicAccent == null || musicAccent === &quot;&quot; ? undefined : (musicAccent) }">
+        <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop, 'fs-immersive': fsImmersive }" @touchstart="fsSwipeStart" @touchmove="fsSwipeMove" @touchend="fsSwipeEnd" :style="{ &quot;--music-accent&quot;: musicAccent == null || musicAccent === &quot;&quot; ? undefined : (musicAccent) }">
           <div class="fs-color-wash" :style="fsWashStyle"></div>
           <div class="fs-bg-wrap">
             <img
@@ -199,7 +199,7 @@
                 </div>
                 <!-- 歌词 / 播放列表（桌面端右侧栏；移动端覆盖封面视图） -->
                 <div class="fs-side">
-                  <div v-show="fsView === 'lyrics'" class="fs-lrc" ref="fsLrcEl" @scroll="onFsLrcScroll">
+                  <div v-show="fsView === 'lyrics'" class="fs-lrc" :class="{ 'fs-lrc-scan': fsScan }" ref="fsLrcEl" @scroll="onFsLrcScroll">
                     <div
                       v-for="(line, i) in lyrics"
                       :key="i"
@@ -332,6 +332,7 @@ const errTip = ref(""); // 播放失败提示（整曲所有源失败时短暂�
 
 // 全屏播放层
 const fsOpen = ref(false);
+const fsImmersive = ref(false); // 沉浸式歌词：隐藏封面/进度/底部控件，歌词整屏居中
 const fsDesktop = ref(false); // 桌面布局：左封面右歌词队列；移动端：竖排
 const fsView = ref("cover"); // 全屏视图：cover（仅移动端）/ lyrics / queue
 const fsLrcEl = ref(null);
@@ -434,6 +435,7 @@ function syncBgShown() {
 
 function openFs() {
   fsOpen.value = true;
+  fsImmersive.value = false; // 每次打开默认歌词视图
   fsDesktop.value = window.matchMedia("(min-width: 980px)").matches;
   fsView.value = "lyrics"; // 两端都默认歌词视图（移动端歌词常驻封面下方）
   fsPrevBodyOverflow = document.body.style.overflow;
@@ -711,8 +713,11 @@ function fsLrcFollow(instant) {
   const line = el.children[lrcIndex.value];
   if (!line) return;
   const target = line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2;
+  // 一次跨越超过半屏（切歌 / 点击进度条跳段）直接到位：
+  // 若仍走 900ms 平滑，会从旧位置追击新目标，造成"跳一下再滚回"的抖跳
+  const far = Math.abs(target - el.scrollTop) > el.clientHeight * 0.5;
   fsProgUntil = performance.now() + (instant ? 300 : 900);
-  if (instant) {
+  if (instant || far) {
     el.scrollTo({ top: target, behavior: "auto" });
   } else {
     smoothScrollTo(el, target);
@@ -730,6 +735,35 @@ watch(fsView, (v) => {
 });
 
 
+
+// ── 移动端横向滑动导航：左滑进沉浸式歌词，右滑返回 ──
+let swX = null, swY = null, swDx = 0, swLock = false;
+function fsSwipeStart(e) {
+  if (fsDesktop.value) return;
+  const t = e.touches[0];
+  swX = t.clientX; swY = t.clientY; swDx = 0; swLock = false;
+}
+function fsSwipeMove(e) {
+  if (fsDesktop.value || swX == null) return;
+  const t = e.touches[0];
+  const dx = t.clientX - swX;
+  const dy = t.clientY - swY;
+  if (!swLock) {
+    // 横向主导锁为横滑；纵向主导（歌词滚动）重置原点，避免脏累加误判
+    if (Math.abs(dx) > Math.abs(dy) + 12 && Math.abs(dx) > 8) swLock = true;
+    else if (Math.abs(dy) > Math.abs(dx) + 12) { swX = t.clientX; swY = t.clientY; return; }
+  }
+  if (swLock) { e.preventDefault(); swDx = dx; }
+}
+function fsSwipeEnd(e) {
+  if (fsDesktop.value || swX == null) return;
+  const dx = swLock ? swDx : (e.changedTouches[0].clientX - swX);
+  swX = swY = null; swLock = false;
+  if (Math.abs(dx) < 55) return;
+  if (dx < 0) fsImmersive.value = !fsImmersive.value; // 左滑切换沉浸
+  else if (fsImmersive.value) fsImmersive.value = false; // 沉浸中右滑回歌词
+  else closeFs(); // 普通视图右滑关闭全屏
+}
 
 // 顶部横杠下拉关闭（跟手拖拽，超过 90px 松手即关）
 let fsDragY0 = 0;
@@ -842,6 +876,24 @@ let scrollTimeout = null;
 let fsIsUserScrolling = false;
 let fsScrollTimeout = null;
 let fsProgUntil = 0;
+const fsScan = ref(false); // 手动滚动期间取消歌词模糊，便于点行调整进度
+// 移动端 timeupdate 稀疏（约 1Hz）导致高亮滞后/跳行，改用 rAF 高频驱动
+let lrcRaf = 0;
+function startLrcTicker() {
+  if (lrcRaf) return;
+  const tick = () => {
+    const a = audioEl.value;
+    if (a && !a.paused) updateLrcHighlight(a.currentTime || 0);
+    lrcRaf = requestAnimationFrame(tick);
+  };
+  lrcRaf = requestAnimationFrame(tick);
+}
+function stopLrcTicker() {
+  if (lrcRaf) {
+    cancelAnimationFrame(lrcRaf);
+    lrcRaf = 0;
+  }
+}
 
 const track = computed(() => playlist.value[index.value] || { name: "音乐", artist: "未在播放" });
 const pct = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0));
@@ -1596,9 +1648,11 @@ function onUserLrcScroll() {
 function onFsLrcScroll() {
   if (performance.now() < fsProgUntil) return;
   fsIsUserScrolling = true;
+  fsScan.value = true; // 取消歌词模糊，能看清其他行再点击调整进度
   clearTimeout(fsScrollTimeout);
   fsScrollTimeout = setTimeout(() => {
     fsIsUserScrolling = false;
+    fsScan.value = false;
     if (fsOpen.value && fsView.value === "lyrics" && lrcIndex.value !== -1) fsLrcFollow(false);
   }, 3000);
 }
@@ -1610,6 +1664,9 @@ onMounted(async () => {
   watch(playing, (v) => {
     musicBus.syncPlaying(v);
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = v ? "playing" : "paused";
+    // rAF 高频驱动歌词高亮：timeupdate 在手机上稀疏（约 1Hz），会滞后/跳行
+    if (v) startLrcTicker();
+    else stopLrcTicker();
   }, { immediate: true });
   loading.value = true;
   try {
@@ -1690,6 +1747,7 @@ function failedLoad() {
 }
 
 onUnmounted(() => {
+  stopLrcTicker();
   musicBus.unregister();
   window.removeEventListener("keydown", onFsEsc);
   audioEl.value?.pause();
@@ -2530,6 +2588,44 @@ onUnmounted(() => {
   font-size: 1.22rem;
   filter: none;
   opacity: 1;
+}
+
+/* 手动滚动（触屏）期间：同样取消模糊，便于看清歌词并点击调整进度；3s 回正后移除 */
+.fs-lrc-scan .fs-lrc-line {
+  filter: none;
+  opacity: 1;
+}
+
+/* 沉浸式歌词（移动端左滑进入）：
+   - 隐藏整屏大封面、进度条、底部控件
+   - 顶部歌曲信息保留，歌词区纵向拉满整屏居中
+   - 歌曲信息上移到顶部（flex order 调整），歌词使用最大字号 */
+.fs-player.fs-immersive .fs-cover-zone,
+.fs-player.fs-immersive .fs-prow,
+.fs-player.fs-immersive .fs-bottom,
+.fs-player.fs-immersive .fs-close,
+.fs-player.fs-immersive .fs-fullscreen {
+  display: none;
+}
+.fs-player.fs-immersive .fs-main {
+  order: 2;
+}
+.fs-player.fs-immersive .fs-side {
+  order: 1;
+  flex: 1;
+}
+.fs-player.fs-immersive .fs-lrc {
+  justify-content: center;
+}
+.fs-player.fs-immersive .fs-lrc::before,
+.fs-player.fs-immersive .fs-lrc::after {
+  height: 0; /* 沉浸式整屏滚动，去掉首尾占位让首句更靠中 */
+}
+.fs-player.fs-immersive .fs-lrc-line {
+  font-size: 1.5rem;
+}
+.fs-player.fs-immersive .fs-lrc-line.active {
+  font-size: 1.7rem;
 }
 
 /* 鼠标移入全屏歌词区：取消其他行的模糊，方便预览/点歌。
