@@ -2612,7 +2612,12 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.42);
   cursor: pointer;
   opacity: 0.5;
-  transition: opacity 0.9s ease, color 0.25s ease, font-size 0.25s ease;
+  /* ⚠️ transition 必须包含 filter：移动端这里没有 filter 无副作用，
+     但桌面端 .fs-desktop .fs-lrc-line 会补回 blur(4px)，而它不重写 transition、
+     靠继承这条——一旦漏掉 filter，blur 的 4px→1.5px→none 就是瞬跳（切句、
+     hover 取消模糊都不再渐变），比 305e313 那版生硬。实测漏掉时
+     computed transition-property = "opacity, color, font-size"。 */
+  transition: filter 0.9s ease, opacity 0.9s ease, color 0.25s ease, font-size 0.25s ease;
 }
 
 .fs-lrc-line.b1 {
