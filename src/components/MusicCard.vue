@@ -178,7 +178,7 @@
 
               <div class="fs-main">
                 <!-- 封面（移动端在上方常驻；桌面端在左侧） -->
-                <div class="fs-cover-zone">
+                <div class="fs-cover-zone" v-show="!(fsView === 'queue' && !fsDesktop)">
                   <div class="fs-cover-box" ref="fsCoverBox" @mousemove="fsCoverMove" @mouseenter="fsCoverEnter" @mouseleave="fsCoverLeave">
                     <div class="fs-cover-inner" :style="{ transform: fsCoverTransform }">
                       <img
@@ -217,6 +217,7 @@
                   </div>
                   <!-- 随全屏一起建好（空闲渐进补齐），点列表只切显示：避免首次点开时的大重绘白条 -->
                   <div v-show="fsView === 'queue'" class="fs-queue" ref="fsQueueEl">
+                  <div class="fs-q-head"><span class="fs-q-title">播放列表</span><span class="fs-q-count">{{ playlist.length }} 首</span></div>
                     <div
                       v-for="(t, i) in fsQRows"
                       :key="i"
@@ -224,6 +225,10 @@
                       :class="{ active: i === index }"
                       @click="fsPickQueue(i)"
                     >
+                      <span class="fs-q-idx" :class="{ on: i === index }">
+                        <svg v-if="i === index" viewBox="0 0 24 24" fill="currentColor"><path d="M8.3 5v14l11-7z"/></svg>
+                        <template v-else>{{ i + 1 }}</template>
+                      </span>
                       <img
                         v-if="t.pic && !t.__err"
                         class="fs-q-cov"
@@ -692,16 +697,20 @@ watch(index, () => {
 
 // 平滑滚动 + 卡死回退：被遮挡窗口/后台标签里 Chromium 会冻结平滑动画，
 // 500ms 后仍在原地就立即跳到目标位（真机亮屏时平滑正常生效）
-function smoothScrollTo(el, target) {
+let smoothToken = 0;
+function smoothScrollTo(el, target, onDone) {
+  const token = ++smoothToken;
   const from = el.scrollTop;
   const dur = 900;
   const t0 = performance.now();
   // 平滑减速缓动（无过冲回弹：只朝当前歌词方向平滑滚动到位）
   const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
   const step = (now) => {
+    if (token !== smoothToken) return; // 被新滚动取代，避免动画叠加抖动
     const p = Math.min(1, (now - t0) / dur);
     el.scrollTop = from + (target - from) * easeOutCubic(p);
     if (p < 1) requestAnimationFrame(step);
+    else if (onDone) onDone();
   };
   requestAnimationFrame(step);
 }
@@ -712,15 +721,19 @@ function fsLrcFollow(instant) {
   if (!el || lrcIndex.value === -1) return;
   const line = el.children[lrcIndex.value];
   if (!line) return;
-  const target = line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2;
+  // 沉浸模式高亮向上提一行：居中位置上移一行间距，当前句偏上，下方露出更多待唱句
+  const rowSpan = line.offsetHeight + 16; // 行高 + gap(16px) = 一行间距
+  const target = line.offsetTop - el.clientHeight / 2 + line.offsetHeight / 2 + (fsImmersive.value ? rowSpan : 0);
   // 一次跨越超过半屏（切歌 / 点击进度条跳段）直接到位：
   // 若仍走 900ms 平滑，会从旧位置追击新目标，造成"跳一下再滚回"的抖跳
   const far = Math.abs(target - el.scrollTop) > el.clientHeight * 0.5;
-  fsProgUntil = performance.now() + (instant ? 300 : 900);
   if (instant || far) {
+    fsProgramScrolling = true;
     el.scrollTo({ top: target, behavior: "auto" });
+    scheduleFsProgramEnd();
   } else {
-    smoothScrollTo(el, target);
+    fsProgramScrolling = true;
+    smoothScrollTo(el, target, scheduleFsProgramEnd);
   }
 }
 
@@ -731,6 +744,13 @@ watch(fsView, (v) => {
   if (v === "lyrics") nextTick(() => fsLrcFollow(true));
   else if (v === "queue") {
     nextTick(() => scrollQueueToActive());
+  }
+});
+// 进入沉浸模式字号放大（1.05→1.5rem），所有行 offsetTop 变化，active 行会错位到"下面"；
+// 立即重新定位，避免"跳到下面再滚回居中"。等一帧让字号变化完成布局（reflow）后再取 offsetTop。
+watch(fsImmersive, (v) => {
+  if (v && fsOpen.value && fsView.value === "lyrics") {
+    requestAnimationFrame(() => fsLrcFollow(true));
   }
 });
 
@@ -875,7 +895,15 @@ let scrollTimeout = null;
 // 全屏歌词用户滚动抑制（仿小卡方案）：用户上翻后暂停自动跟随，3s 后回正
 let fsIsUserScrolling = false;
 let fsScrollTimeout = null;
-let fsProgUntil = 0;
+let fsProgramScrolling = false; // 程序滚动进行中：期间 scroll 事件不算用户滚动
+let fsProgramEndTimer = 0;
+function scheduleFsProgramEnd() {
+  clearTimeout(fsProgramEndTimer);
+  // scroll 事件在 scrollTop 变化后异步派发，延迟解除标志避免误判为用户滚动（取消模糊）
+  fsProgramEndTimer = setTimeout(() => {
+    fsProgramScrolling = false;
+  }, 80);
+}
 const fsScan = ref(false); // 手动滚动期间取消歌词模糊，便于点行调整进度
 // 移动端 timeupdate 稀疏（约 1Hz）导致高亮滞后/跳行，改用 rAF 高频驱动
 let lrcRaf = 0;
@@ -1646,7 +1674,7 @@ function onUserLrcScroll() {
 
 // 全屏歌词：用户手动滚动后暂停自动跟随 3 秒，再回正到当前句
 function onFsLrcScroll() {
-  if (performance.now() < fsProgUntil) return;
+  if (fsProgramScrolling) return; // 程序滚动（切词跟随/回正）期间的 scroll 不算用户滚动
   fsIsUserScrolling = true;
   fsScan.value = true; // 取消歌词模糊，能看清其他行再点击调整进度
   clearTimeout(fsScrollTimeout);
@@ -2130,18 +2158,15 @@ onUnmounted(() => {
   color: var(--text-dim);
   padding: 4px 0;
   cursor: pointer;
-  filter: blur(3px);
   opacity: 0.55;
-  transition: filter 0.9s ease, opacity 0.9s ease, color 0.3s ease, font-size 0.3s ease;
+  transition: opacity 0.9s ease, color 0.3s ease, font-size 0.3s ease;
 }
 
 .lrc-line.b1 {
-  filter: blur(1.2px);
   opacity: 0.75;
 }
 
 .lrc-line.b2 {
-  filter: blur(2.2px);
   opacity: 0.62;
 }
 
@@ -2153,14 +2178,12 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.74);
   font-weight: 700;
   font-size: 0.95rem;
-  filter: none;
   opacity: 1;
 }
 
 /* 鼠标移入歌词区：取消其他行的模糊，方便预览/点歌。仅限支持 hover 的设备，避免触屏粘滞 */
 @media (hover: hover) {
   .lrc-container:hover .lrc-line {
-    filter: none;
     opacity: 1;
   }
 }
@@ -2567,32 +2590,28 @@ onUnmounted(() => {
   line-height: 1.55;
   color: rgba(255, 255, 255, 0.42);
   cursor: pointer;
-  filter: blur(4px);
   opacity: 0.5;
-  transition: filter 0.9s ease, opacity 0.9s ease, color 0.25s ease, font-size 0.25s ease;
+  transition: opacity 0.9s ease, color 0.25s ease, font-size 0.25s ease;
 }
 
 .fs-lrc-line.b1 {
-  filter: blur(1.5px);
   opacity: 0.72;
 }
 
 .fs-lrc-line.b2 {
-  filter: blur(2.8px);
   opacity: 0.55;
 }
 
 .fs-lrc-line.active {
-  color: rgba(255, 255, 255, 0.74);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 700;
-  font-size: 1.22rem;
-  filter: none;
+  /* 不再放大字号：字号突变改变行高造成 layout shift，滚动时"跳一下再滚回"；
+     与桌面端一致，用提亮 + 加粗区分，行高稳定 */
   opacity: 1;
 }
 
-/* 手动滚动（触屏）期间：同样取消模糊，便于看清歌词并点击调整进度；3s 回正后移除 */
+/* 手动滚动（触屏）期间：提亮所有歌词，便于看清并点击调整进度；3s 回正后移除 */
 .fs-lrc-scan .fs-lrc-line {
-  filter: none;
   opacity: 1;
 }
 
@@ -2614,18 +2633,11 @@ onUnmounted(() => {
   order: 1;
   flex: 1;
 }
-.fs-player.fs-immersive .fs-lrc {
-  justify-content: center;
-}
-.fs-player.fs-immersive .fs-lrc::before,
-.fs-player.fs-immersive .fs-lrc::after {
-  height: 0; /* 沉浸式整屏滚动，去掉首尾占位让首句更靠中 */
-}
 .fs-player.fs-immersive .fs-lrc-line {
   font-size: 1.5rem;
 }
 .fs-player.fs-immersive .fs-lrc-line.active {
-  font-size: 1.7rem;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 /* 鼠标移入全屏歌词区：取消其他行的模糊，方便预览/点歌。
@@ -2633,7 +2645,6 @@ onUnmounted(() => {
    若不加限定会把这些行的模糊/强调态全取消，移动端“模糊丢失”。 */
 @media (hover: hover) {
   .fs-lrc:hover .fs-lrc-line {
-    filter: none;
     opacity: 1;
   }
 }
@@ -3064,6 +3075,37 @@ onUnmounted(() => {
 }
 
 /* 队列列表（桌面右侧 / 移动端封面视图） */
+.fs-q-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 2px 0;
+}
+.fs-q-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+}
+.fs-q-count {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+.fs-q-idx {
+  width: 22px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.4);
+}
+.fs-q-idx svg {
+  width: 14px;
+  height: 14px;
+}
+.fs-q-idx.on {
+  color: var(--music-accent, var(--accent1));
+}
 .fs-queue {
   flex: 1;
   min-height: 0;
@@ -3101,13 +3143,25 @@ onUnmounted(() => {
 }
 
 .fs-q-row.active {
-  background: rgba(255, 255, 255, 0.14);
+  position: relative;
+  background: rgba(255, 255, 255, 0.16);
+}
+.fs-q-row.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 58%;
+  border-radius: 99px;
+  background: var(--music-accent, var(--accent1));
 }
 
 .fs-q-cov {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
   object-fit: cover;
   flex-shrink: 0;
 }
