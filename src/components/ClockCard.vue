@@ -37,7 +37,7 @@ onMounted(async () => {
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   try {
-    const cached = JSON.parse(localStorage.getItem("lunar_today_v2") || "null");
+    const cached = JSON.parse(localStorage.getItem("lunar_today") || "null");
     if (cached && cached.date === today && cached.text) {
       lunarText.value = cached.text;
       return;
@@ -54,7 +54,13 @@ onMounted(async () => {
       ).then((r) => r.json()),
     ]);
 
-    const parts = [`农历${lunar.lunar_month_cn}${lunar.lunar_day_cn}`, `${lunar.ganzhi_year}${lunar.zodiac}年`];
+    // 接口可能返回 200 但字段缺失：缺字段不拼“undefined”，判为失败走静默隐藏
+    const monthDay = `${lunar.lunar_month_cn || ""}${lunar.lunar_day_cn || ""}`.trim();
+    const ganzhi = `${lunar.ganzhi_year || ""}${lunar.zodiac || ""}`;
+    const parts = [];
+    if (monthDay) parts.push(`农历${monthDay}`);
+    if (ganzhi) parts.push(`${ganzhi}年`);
+    if (!parts.length) throw new Error("lunar empty");
     // 过滤掉“补班上班日”和“节气”，只对真正的节日/假期倒数
     const isReal = (e) => e.type !== "legal_workday_adjust" && e.type !== "solar_term";
     const next = (holiday.nearby?.next || []).find((n) => n.events?.some(isReal));
@@ -66,7 +72,7 @@ onMounted(async () => {
     }
     lunarText.value = parts.join(" · ");
     try {
-      localStorage.setItem("lunar_today_v2", JSON.stringify({ date: today, text: lunarText.value }));
+      localStorage.setItem("lunar_today", JSON.stringify({ date: today, text: lunarText.value }));
     } catch {
       // 存储失败不影响展示
     }

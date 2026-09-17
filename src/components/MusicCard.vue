@@ -829,8 +829,10 @@ const coverSpinning = computed(() => playing.value);
 
 // 切歌时始终解析官方高清封面（主卡小封面与全屏共用，面板关闭也在后台预取）
 watch(track, () => {
-  resolveFsCover();
+  // resolveFsCover 切歌时后台解析（不打开全屏也会跑）：先立即按当前可用封面设一次，
+  // 官方高清封面（非网易图走异步检索）解析到位后，MediaSession 再同步一次，与全屏用同一张
   syncMediaSession();
+  resolveFsCover().then(() => syncMediaSession());
 });
 
 // 网易云 CDN 加尺寸参数取高清封面（1024²），其他图源原样返回
@@ -1596,7 +1598,7 @@ function bindMediaSession() {
 function syncMediaSession() {
   if (!("mediaSession" in navigator)) return;
   const t = track.value;
-  const cover = t && t.pic ? hdCover(t.pic) : "";
+  const cover = t && t.pic ? (fsCoverSrc.value || hdCover(t.pic)) : "";
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: (t && t.name) || "音乐",
