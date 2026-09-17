@@ -54,6 +54,7 @@
     </div>
 
     <p class="play-err" v-show="errTip">{{ errTip }}</p>
+    <p class="play-hint" v-show="resolving && !errTip">正在解析音源直链…</p>
 
     <!-- Controls -->
     <div class="controls">
@@ -334,6 +335,7 @@ const coverImg = ref(null);
 const lrcOpen = ref(false);
 const plOpen = ref(true); // 播放列表默认展开（手机端有 230px 封顶内滚，不会撑长卡片）
 const errTip = ref(""); // 播放失败提示（整曲所有源失败时短暂显示）
+const resolving = ref(false); // 代理直链解析中：这段时间是静音的，给个提示，别让人以为切歌没生效
 
 // 全屏播放层
 const fsOpen = ref(false);
@@ -1271,9 +1273,13 @@ const proxyMemo = new Map();
 const PROXY_MEMO_MS = 10 * 60 * 1000;
 const PROXY_FAIL_MS = 30 * 1000; // 负缓存：解析失败后短时间内不再重试
 
-// 超时给 5 秒：函数冷启动时要装载全部音源脚本（实测约 1 秒）再解析，
-// 3 秒会在冷启动那次超时、白白退回 Meting。解析发生在预载阶段，用户点播放前通常已就绪。
-async function resolveProxyUrl(t, ms = 5000) {
+// 超时给 12 秒：函数冷启动时要装载全部音源脚本（实测约 1 秒）再解析，而**音源自身的耗时在网络
+// 抖动时能到 5~6 秒**（实测某聚合源 1.4s ⇄ 5.8s 反复横跳）。3 秒/5 秒这种紧超时会在最需要它的
+// 时候超时，然后静默退回 Meting——而 Meting 对 VIP 曲只有 404，结果就是"VIP 歌直接没声"。
+// 12 秒装得下服务端最坏情况（INVOKE_TIMEOUT_MS=9s + 装载/探活）。
+const PROXY_TIMEOUT_MS = 12000;
+
+async function resolveProxyUrl(t, ms = PROXY_TIMEOUT_MS) {
   if (!proxyEnabled()) return "";
   const id = songIdOf(t);
   if (!id) return "";
@@ -1442,18 +1448,33 @@ function loadAndPlay(i, autoPlay = true) {
     errorSkipTimer = null;
   }
 
+  // ★ 切歌那一刻就把上一首掐掉。
+  // 以前是等 playCurrentUrl 才换 audio.src，中间隔着整个"解析直链"的时间（代理模式下最长
+  // 十秒），于是封面/歌词/标题早就换好了，耳朵里还在放上一首——这正是"切了歌还在放旧歌"的成因。
+  // 清掉 src 而不是留着：否则这段空档里点播放会走 togglePlay 的 `audio.src` 分支，把旧歌又放起来。
+  try {
+    audio.pause();
+  } catch {
+    // 某些环境暂停会抛（媒体未就绪），忽略
+  }
+  audio.removeAttribute("src");
+  audio.load();
+  playing.value = false;
+  resolving.value = false;
+
   // Meting 候选链：歌单竞速的胜出源优先（当前网络下它最可达），其余源殿后。
   // 代理模式下它同时扮演两个角色——代理没结果时的兜底，以及代理直链失效后的降级链。
   const meting = metingCandidates(t);
 
   loadLyrics(t);
   prefetchNextLyrics();
-  // 顺手把下一首的直链也解析掉（延迟一点发起，别和当前这首抢）：切歌时不必再等冷启动
-  if (proxyEnabled()) {
+  // 顺手把下一首的直链也解析掉（延迟一点发起，别和当前这首抢）：切歌时不必再等冷启动。
+  // 随机模式下下一首不可预知，预取等于白花一次函数调用（与 prefetchNextTrack 的判断保持一致）。
+  if (proxyEnabled() && playMode.value !== 2) {
     const nx = playlist.value[(i + 1) % playlist.value.length];
     if (nx && nx !== t) {
       setTimeout(() => {
-        if (proxyEnabled()) resolveProxyUrl(nx, 6000);
+        if (proxyEnabled()) resolveProxyUrl(nx);
       }, 1500);
     }
   }
@@ -1483,7 +1504,15 @@ function loadAndPlay(i, autoPlay = true) {
   // Meting 对 VIP 曲返回的"能播的 30 秒试听片段"会抢下竞速、让完整直链永远用不上。
   // Meting 整条链只作为降级：代理直链播放失败（error/看门狗）时，降级链才轮到它，
   // 也就是说「解析出的直链全部失效」之后才会切回 Meting。
+  // 提示延迟 350ms 才出现：解析快时（实测线上 p50 ≈0.53s）闪一下文案反而更烦，
+  // 只在真的等久了才提示。切歌/落定都要能取消它。
+  const hintTimer = setTimeout(() => {
+    if (ver === loadVersion) resolving.value = true;
+  }, 350);
   resolveProxyUrl(t).then((u) => {
+    clearTimeout(hintTimer);
+    if (ver !== loadVersion) return; // 解析期间又切歌了：提示与播放都交给新那次
+    resolving.value = false;
     if (!u) {
       begin(meting); // 压根没解析到（超时/音源全失败）→ 直接走 Meting
       return;
@@ -1515,6 +1544,9 @@ let lastErrAt = 0; // 同一个错误的 error 事件与 play() reject 可能双
 // 当前源失效（过期/版权/断链/挂起）：先换下一个候选源，全部失败 2 秒后跳下一首
 // 预载阶段（用户还没点播放）静默失败即可，绝不自动出声
 function onAudioError() {
+  const a = audioEl.value;
+  // 切歌瞬间是我们自己清掉 src 的（见 loadAndPlay），那不算"播放失败"
+  if (!a || !a.getAttribute("src")) return;
   if (!playlist.value.length || !wantPlay) return;
   if (performance.now() - lastErrAt < 300) return;
   lastErrAt = performance.now();
@@ -1844,6 +1876,12 @@ onUnmounted(() => {
   margin-top: 6px;
   font-size: 0.72rem;
   color: #f87171;
+}
+
+.play-hint {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
 }
 
 @keyframes spin {

@@ -10,3 +10,5 @@ dist
 sources/*
 !sources/README.md
 !sources/source.example.js
+# ranking.json 只是"哪家快、哪家给 320k"的排序（不含第三方代码），要跨实例生效就得提交
+!sources/ranking.json
