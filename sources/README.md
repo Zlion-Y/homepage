@@ -4,7 +4,7 @@
 
 另外这个目录还可以放一个**可选的 `ranking.json`**：它记录音源优先级（哪家快、哪家给 320k），
 提交进仓库后对全部函数实例生效。没有这个文件就退回"目录顺序"，不影响任何功能
-—— 字段含义与评分口径见仓库根 README 的「音源优先级」一节。
+—— 字段含义与评分口径见 [`docs/proxy.md`](../docs/proxy.md) 的「音源优先级」一节。
 
 加音源有两条路，任选。
 
@@ -70,4 +70,4 @@ SOURCE_URLS = https://gist.githubusercontent.com/xxx/raw/a.js,https://你的服�
 | `ALLOW_NO_ORIGIN` | 关 | `1` = 也允许不带 Origin/Referer 的请求 |
 
 部署后从站内页面（或带本站 Referer 的 curl）调 `/api/health` 就能看到装上了哪些音源、各自的声明平台和
-已记录的失败原因 —— 具体调法与访问控制见仓库根 README 的「接口速查」。
+已记录的失败原因 —— 具体调法与访问控制见 [`docs/proxy.md`](../docs/proxy.md) 的「接口速查」。

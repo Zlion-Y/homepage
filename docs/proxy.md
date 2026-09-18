@@ -144,7 +144,8 @@ curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …
 }
 ```
 
-- 本仓库的 `.gitignore` 排除 `sources/*`（不放第三方音源脚本），已为你留了 `!sources/ranking.json` 例外；
+- 音源脚本与 `ranking.json` 都要**提交进仓库**才会被函数加载（`vercel.json` 的 `includeFiles: "sources/**"`
+  只打包仓库里已有的文件）；不想把脚本放进仓库，就用 `SOURCE_URLS` 指向在线脚本；
 - **没有这个文件 / 文件坏了，功能完全不受影响**（退回目录顺序、不做质量兜底）；
 - `q` 是音质比（0~1）：该源拿到的直链字节数 ÷ 同一首歌里各源的最大字节数 —— 同一首歌时长相同，
   所以字节数之比 ≈ 码率之比，**不需要任何时长元信息**就能看出谁被降级成 128k（实测 2.50× = 320k/128k）；
