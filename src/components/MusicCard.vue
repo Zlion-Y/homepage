@@ -322,7 +322,11 @@ const loading = ref(true);
 const playlist = ref([]);
 const index = ref(0);
 const playing = ref(false);
-const playMode = ref(2); // 默认随机播放（0 列表循环 1 单曲 2 随机）
+// 默认列表循环（0 列表循环 1 单曲 2 随机）。
+// 不用随机做默认：随机模式下"下一首"不可预知，prefetchNextTrack 与代理直链预解析
+// 都只能跳过（下一首命中率≈1/n，纯耗流量），切歌要等冷启动。列表循环的下一首是确定的，
+// 预载才能命中，切歌直接复用它探活出的源。
+const playMode = ref(0);
 const volume = ref(1);
 const isMuted = ref(false);
 const currentTime = ref(0);
@@ -360,7 +364,8 @@ const fsModeIcons = {
   2: "M14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z",
 };
 const fsModeIcon = computed(() => fsModeIcons[playMode.value] || fsModeIcons[0]);
-const fsModeTitle = computed(() => ({ 0: "顺序播放", 1: "单曲循环", 2: "随机播放" }[playMode.value] || "播放模式"));
+// 模式 0 是 (index+1) % n，播到末尾会绕回第一首，叫"列表循环"而不是"顺序播放"
+const fsModeTitle = computed(() => ({ 0: "列表循环", 1: "单曲循环", 2: "随机播放" }[playMode.value] || "播放模式"));
 
 async function resolveFsCover() {
   const t = track.value;
@@ -1233,6 +1238,10 @@ function scrollLrcTo(idx, behavior) {
   const line = lrcEl.value?.children[idx];
   if (!line || !lrcEl.value) return;
   const target = line.offsetTop - lrcEl.value.clientHeight / 2 + line.offsetHeight / 2;
+  // 一次跨越超过半屏（切歌 / 拖动进度条跳段）直接到位：若仍走 900ms 平滑，
+  // 会从旧位置一路追到新目标，看起来就是"跳一下再滚回"（与全屏 fsLrcFollow 同理）
+  const far = Math.abs(target - lrcEl.value.scrollTop) > lrcEl.value.clientHeight * 0.5;
+  if (far) behavior = "auto";
   // 平滑滚动的事件可持续数百 ms，窗口要盖过它，否则自己的滚动会被当成用户滚动
   progScrollUntil = performance.now() + (behavior === "smooth" ? 900 : 300);
   if (behavior === "smooth") {
@@ -1603,7 +1612,12 @@ function togglePlay() {
       return;
     }
     armLoadTimer(loadVersion); // 用户点了播放：挂起源同样要走看门狗
-    audio.play().then(() => (playing.value = true)).catch((e) => {
+    audio.play().then(() => {
+      playing.value = true;
+      // 首曲是页面加载时以 autoPlay=false 预载的，没走过 playCurrentUrl 的成功分支，
+      // 这里补一次——否则第一首播完切歌仍是冷启动。函数内部自带模式/缓存判断，重复调用无副作用
+      prefetchNextTrack();
+    }).catch((e) => {
       if (e.name === "AbortError") return;
       // 预载的源已提前死亡（error 事件在预载期已消费）：走降级链换源播放
       playing.value = false;
@@ -2200,7 +2214,7 @@ onUnmounted(() => {
   position: relative; /* 让 .lrc-line 的 offsetTop 以容器为基准，居中定位才准确 */
   height: calc(100% - 8px); /* 填满抽屉槽位：可视窗口即居中窗口 */
   overflow-y: auto;
-  overflow-anchor: none; /* 行高亮改变行高，关掉锚定补偿防止跟丢 */
+  overflow-anchor: none; /* 关掉滚动锚定补偿，避免它和程序滚动互相拉扯 */
   margin-top: 8px;
   padding: 60px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -2209,7 +2223,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   text-align: center;
-  scroll-behavior: smooth;
+  /* ⚠️ 不要设 scroll-behavior: smooth：CSS 的它会覆盖 scrollTo({behavior:"auto"})，
+     把"开抽屉定位""用户滚动后回正"这些本该瞬时到位的调用也变成动画。
+     平滑滚动只交给 smoothScrollTo 一处负责，两套动画叠加会加重抖动 */
+  scroll-behavior: auto;
 }
 
 .lrc-line {
@@ -2218,7 +2235,7 @@ onUnmounted(() => {
   padding: 4px 0;
   cursor: pointer;
   opacity: 0.55;
-  transition: opacity 0.9s ease, color 0.3s ease, font-size 0.3s ease;
+  transition: opacity 0.9s ease, color 0.3s ease;
 }
 
 .lrc-line.b1 {
@@ -2234,9 +2251,11 @@ onUnmounted(() => {
 }
 
 .lrc-line.active {
-  color: rgba(255, 255, 255, 0.74);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 700;
-  font-size: 0.95rem;
+  /* 不再放大字号：字号突变会改变行高，后面所有行的 offsetTop 整体下移，
+     而滚动目标是用变字号之前量到的 offsetTop 算的——现象就是高亮先被甩到
+     下面、再被滚回中间。与全屏 .fs-lrc-line.active 保持一致：提亮 + 加粗区分 */
   opacity: 1;
 }
 

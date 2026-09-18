@@ -59,7 +59,7 @@ function loop() {
     p.x += p.vx;
     p.y += p.vy;
     p.vx *= 0.974;
-    p.vy = p.vy * 0.974 + 0.062; // 阻尼 + 重力（都调小，粒子飘得久一点）
+    p.vy = p.vy * 0.974 + 0.048; // 阻尼 + 重力（都调小，粒子飘得久一点）
     p.life -= p.decay;
     if (p.life <= 0) continue;
     ctx.globalAlpha = Math.min(1, p.life);
@@ -84,8 +84,10 @@ function loop() {
 export function firework(x, y, opts = {}) {
   if (REDUCED || typeof x !== "number" || typeof y !== "number") return;
   ensureCanvas();
-  const count = opts.count ?? 34;
-  const spread = opts.spread ?? 1;
+  // count/spread 一起放大：spread 只拉大扩散半径，圈变大后同样的粒子数会显得稀，
+  // 所以按半径增幅同步补粒子，视觉密度维持原样
+  const count = opts.count ?? 50;
+  const spread = opts.spread ?? 1.45;
   for (let i = 0; i < count; i++) {
     const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
     const speed = (1.7 + Math.random() * 4.4) * spread;
@@ -97,12 +99,13 @@ export function firework(x, y, opts = {}) {
       size: 1.6 + Math.random() * 2.1,
       color: COLORS[(Math.random() * COLORS.length) | 0],
       life: 1,
-      // 衰减慢一些：粒子能飘 1.5~3 秒，看得清
-      decay: 0.0055 + Math.random() * 0.0075,
+      // 衰减整体放慢约 1.45×：区间同步拉伸（不是只压小上限），保住参差淡出而不是
+      // 所有粒子一起消失。中位 2.6 秒、最长 4.2 秒，看得出飘落过程
+      decay: 0.0039 + Math.random() * 0.0050,
     });
   }
-  // 起爆的一下白闪
-  particles.push({ x, y, vx: 0, vy: 0, size: 9, color: "#ffffff", life: 1, decay: 0.055, flash: true });
+  // 起爆的一下白闪。半径跟着 spread 走，换 spread 时起爆中心不会和扩散范围脱节
+  particles.push({ x, y, vx: 0, vy: 0, size: 9 * spread, color: "#ffffff", life: 1, decay: 0.055, flash: true });
 
   if (!running) {
     running = true;
