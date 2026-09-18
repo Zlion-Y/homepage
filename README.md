@@ -86,7 +86,7 @@ npm run dev
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `API_TOKEN` | 未设置 | 设置后接口需带 `?token=xxx` 或 `Authorization: Bearer xxx` 访问 |
+| `API_TOKEN` | 未设置 | 加固跨站调用：**同源请求自动豁免**（自家前端不用改造）；跨站/无 Origin-Referer 的调用需带 `?token=xxx` 或 `Authorization: Bearer xxx`（token 会进访问日志，生产建议用 Authorization 头） |
 | `ALLOW_ORIGINS` | 仅同源 | 允许跨站调用（逗号分隔的完整 Origin，如 `https://a.com,https://b.com`） |
 | `ALLOW_NO_ORIGIN` | `0` | 设为 `1` 放行无 Origin/Referer 的请求（curl 自检等场景） |
 | `QUALITY` | `320k` | 音质档位（128k / 320k / flac / flac24bit） |

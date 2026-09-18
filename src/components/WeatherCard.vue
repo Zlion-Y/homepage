@@ -109,10 +109,12 @@ function yAt(designY, bh) {
 const dayLabelY = computed(() => yAt(101, boxH.value));
 
 const weatherIcon = computed(() => {
+  // weather_icon 是和风（QWeather）码表：3xx=雨、4xx=雪、2xx=风、1xx/15x=晴多云。
+  // 旧映射把 2xx 当雨、3xx 当雪，结果下雨天显示雪花图标
   const code = String(weather.value?.icon || "");
-  if (code.startsWith("2")) return "rain";
-  if (code.startsWith("3")) return "snow";
-  if (code === "100") return "sun";
+  if (code.startsWith("3")) return "rain";
+  if (code.startsWith("4")) return "snow";
+  if (code === "100" || code === "150") return "sun";
   return "cloud";
 });
 

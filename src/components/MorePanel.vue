@@ -67,6 +67,10 @@ const gridRows = computed(
 const emit = defineEmits(["close"]);
 
 function onKey(e) {
+  // 全屏播放器开着时把 Esc 让给它（先关全屏，再按一次才关面板）。
+  // 主防线在 MusicCard.onFsEsc 的 stopImmediatePropagation（body.fs-open 类会在
+  // 同一次按键内被 before-leave 摘掉，这里查类只是双保险，拦"离开动画期间的二次 Esc"）。
+  if (document.body.classList.contains("fs-open")) return;
   if (e.key === "Escape") emit("close");
 }
 

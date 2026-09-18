@@ -22,21 +22,22 @@ export async function GET(request) {
       `♻️  音源已强制重装: hosts=${s.hosts.length}, ready=${s.hosts.filter((h) => h.ready).length}`
     )
   }
-  return new Response(
-    JSON.stringify(
-      {
-        ok: s.hosts.some((h) => h.ready),
-        host: 'zlion-music-vercel',
-        build: process.env.VERCEL_GIT_COMMIT_SHA || 'dev',
-        region: process.env.VERCEL_REGION || 'local',
-        refreshed: wantRefresh,
-        ...s,
-      },
-      null,
-      2
-    ),
-    { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } }
-  )
+  const body = {
+    ok: s.hosts.some((h) => h.ready),
+    host: 'zlion-music-vercel',
+    build: process.env.VERCEL_GIT_COMMIT_SHA || 'dev',
+    region: process.env.VERCEL_REGION || 'local',
+    refreshed: wantRefresh,
+    ...s,
+  }
+  // cors 是 Headers 实例，不能 ...spread 进对象字面量（Headers 无可枚举自有属性，
+  // 展开结果为空、CORS 头全丢——lib/netease.mjs 顶部注释记过同一个坑），先拷进新 Headers
+  const hdrs = new Headers({
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  })
+  cors.forEach((v, k) => hdrs.set(k, v))
+  return new Response(JSON.stringify({ ...body }, null, 2), { headers: hdrs })
 }
 
 export async function OPTIONS(request) {

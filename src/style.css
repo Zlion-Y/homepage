@@ -295,26 +295,7 @@ body.custom-cursor * {
   }
 }
 
-/* 打字机光标 */
-.caret {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 3px;
-  vertical-align: -0.12em;
-  background: var(--accent2);
-  animation: caret-blink 1s step-end infinite;
-}
-
-@keyframes caret-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
+/* 打字机光标：实现在 GreetCard 的 scoped 样式里（含 keyframes），此处不再重复 */
 
 /* ── 点击进入二级面板的烟花 + 小提示（见 utils/fx.js） ── */
 .fx-canvas {

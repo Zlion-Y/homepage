@@ -42,6 +42,11 @@ const lines =
   siteConfig.motto && siteConfig.motto.length > 1
     ? siteConfig.motto
     : [siteConfig.desc];
+// 配置写坏（空数组 / 非字符串 / 全空行）时兜底成空串，别让打字机在 setup 里抛错
+for (let i = lines.length - 1; i >= 0; i--) {
+  if (typeof lines[i] !== "string" || !lines[i]) lines.splice(i, 1);
+}
+if (!lines.length) lines.push("");
 const typing = lines.length > 1;
 
 const display = ref(lines[0]);

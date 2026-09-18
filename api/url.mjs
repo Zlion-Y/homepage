@@ -11,6 +11,7 @@
  */
 import { hostsFor, scheduler } from '../lib/registry.mjs'
 import { verifyDirectLink } from '../lib/verify.mjs'
+import { assertPublicHttpUrl } from '../lib/lx-host.mjs'
 import { corsHeaders, json, tokenOK } from '../lib/http.mjs'
 
 // 注意：非 Next.js 项目里没有 `export const config = {...}` 这种写法，
@@ -110,6 +111,19 @@ export async function GET(request) {
     const rawLink = link
     const wasHttp = /^http:\/\//i.test(link)
     link = wasHttp ? 'https://' + link.slice(7) : link
+    // 直链本身也要过内网/元数据地址校验：脚本可能返回 http://169.254.169.254/... 这类
+    // "直链"——服务器拿它探活等于代为探测内网，下发给用户浏览器则变成对用户内网的
+    // 请求。判硬失败走降级链（换下一家音源）。
+    try {
+      await assertPublicHttpUrl(link)
+    } catch (e) {
+      console.warn(
+        `[verify] 直链指向内网/非法地址 source=${source} via=${r.via} url=${link} err=${e && e.message}`
+      )
+      const body = { code: 1, msg: '直链校验未通过', source }
+      if (wantDebug) body.trace = { ...trace(r), verify: 'blocked', url: link }
+      return json(body, { status: 502, extra: cors })
+    }
     let verifyMs = 0
     let verifySkipped = false
 

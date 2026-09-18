@@ -87,12 +87,12 @@ curl -s -H "Referer: https://你的域名" "https://你的域名/api/url?id=2873
 | 带其它站点的 Origin/Referer | **403** |
 | 别的网站里 `fetch` 本站接口 | 被 CORS 挡掉（`Access-Control-Allow-Origin` 只回本站） |
 
-配了 `API_TOKEN` 之后还要再过一道：**`?token=` 但没带 Referer 仍然是 403**，必须「同源头 + token」
-两个都满足：
+配了 `API_TOKEN` 之后：**同源请求自动豁免**（自家前端从不带 token，不必为此改造），
+跨站 / 无 Origin-Referer 的调用才需要再过 token 这一道——`?token=` 但没带 Referer 仍然 403：
 
 ```bash
-curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …
-# 或 ?token=$TOKEN
+curl -H "Authorization: Bearer $TOKEN" …                                  # 无 Referer：要 token
+curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …  # 同源：token 可省
 ```
 
 想放行无 Origin/Referer 的请求（比如纯 curl 自检）才需要 `ALLOW_NO_ORIGIN=1`，但那就等于对外公开了，谨慎。
@@ -113,7 +113,7 @@ curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `API_TOKEN` | 未设置 | 设置后 `/api/health`、`/api/url` 需带 `?token=xxx` 或 `Authorization: Bearer xxx` 访问 |
+| `API_TOKEN` | 未设置 | 同源请求自动豁免；跨站/无 Origin-Referer 的调用需带 `?token=xxx` 或 `Authorization: Bearer xxx` |
 | `ALLOW_ORIGINS` | 仅同源 | 允许跨站调用（逗号分隔的完整 Origin，如 `https://a.com,https://b.com`） |
 | `ALLOW_NO_ORIGIN` | `0` | 设为 `1` 时放行无 Origin/Referer 的请求（curl 自检等场景） |
 | `QUALITY` | `320k` | 音质档位（128k / 320k / flac / flac24bit） |
@@ -155,6 +155,22 @@ curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …
 
 > 这一版**没有**做测速接口或管理页面（属于主页以外的功能，已移除）。需要重排时，本地跑一段脚本调用
 > `lib/ranking.mjs` 的 `aggregate()` 生成文件即可，口径与运行时读的是同一处代码。
+
+---
+
+## 安全边界：这套隔离能挡什么、不能挡什么
+
+函数里跑的是第三方音源脚本，隔离手段有两个，都要按"纵深防御"理解、不要当沙箱承诺：
+
+- **`node:vm` 不是安全边界**。`createContext` 只提供独立的全局对象，恶意脚本可以经
+  `this.constructor.constructor('return process')()` 逃逸到宿主 realm 拿到真实的
+  `process` / `require`。"不往沙箱注入 fetch/require/process"只是抬高门槛，
+  **前提是脚本半可信**（随仓库提交、或 `SOURCE_URLS` 指向你自己的托管地址）。
+  要跑完全不可信的脚本，请换 isolate-vm / 独立进程沙箱，不要依赖本实现。
+- **SSRF 校验挡得住"直接写内网地址"，挡不住间接路径**。`lx.request` 出网前会解析
+  DNS 并拒绝内网/元数据地址（`lib/lx-host.mjs` 的 `assertPublicHttpUrl`）；
+  但 `redirect: 'follow'` 自动跟随的中间跳转绕过首跳校验（实现里对最终 URL 做了
+  落地复核兜底），DNS Rebinding 理论上也能绕。
 
 ---
 

@@ -107,7 +107,9 @@ async function switchTo(key) {
   } catch {
     if (active.value === key) failed.value = true;
   } finally {
-    loading.value = false;
+    // 只有"仍是当前平台"才收 loading：否则快速切台时，旧请求的 finally 会把
+    // 新请求的加载态提前掐掉
+    if (active.value === key) loading.value = false;
   }
 }
 

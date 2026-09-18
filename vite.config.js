@@ -1,9 +1,24 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { fileURLToPath, URL } from "node:url";
-import { readdirSync, rmSync } from "node:fs";
+import { readdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { currentSiteFont } from "./src/fonts.js";
+
+// 本地 dev/preview 代理网易接口时补上伪装头，和线上 lib/netease.mjs 的函数代发
+// 行为一致——裸请求（不带 UA/Referer）从 Vite 进程出去容易触发网易风控
+const NETEASE_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Referer: "https://music.163.com/",
+};
+
+const neteaseProxy = (rewrite) => ({
+  target: "https://music.163.com",
+  changeOrigin: true,
+  headers: NETEASE_HEADERS,
+  rewrite,
+});
 
 /**
  * 构建产物字体裁剪：public/font/ 里 7 个候选字体共约 680KB，但 siteFont
@@ -16,6 +31,8 @@ function pruneUnusedFonts() {
     name: "prune-unused-fonts",
     closeBundle() {
       const dir = fileURLToPath(new URL("./dist/font", import.meta.url));
+      // public/font 整个被移除（或输出目录变动）时别让构建炸在 ENOENT 上
+      if (!existsSync(dir)) return;
       const keep = currentSiteFont().file;
       let removed = 0;
       for (const f of readdirSync(dir)) {
@@ -44,21 +61,9 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/blog-rss/, "/rss.xml"),
       },
-      "/netease-search": {
-        target: "https://music.163.com",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/netease-search/, "/api/search/get/web"),
-      },
-      "/netease-album": {
-        target: "https://music.163.com",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/netease-album/, "/api/v1/album"),
-      },
-      "/netease-songs": {
-        target: "https://music.163.com",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/netease-songs/, "/api/song/detail/"),
-      },
+      "/netease-search": neteaseProxy((path) => path.replace(/^\/netease-search/, "/api/search/get/web")),
+      "/netease-album": neteaseProxy((path) => path.replace(/^\/netease-album/, "/api/v1/album")),
+      "/netease-songs": neteaseProxy((path) => path.replace(/^\/netease-songs/, "/api/song/detail/")),
     },
   },
   preview: {
@@ -68,21 +73,9 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/blog-rss/, "/rss.xml"),
       },
-      "/netease-search": {
-        target: "https://music.163.com",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/netease-search/, "/api/search/get/web"),
-      },
-      "/netease-album": {
-        target: "https://music.163.com",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/netease-album/, "/api/v1/album"),
-      },
-      "/netease-songs": {
-        target: "https://music.163.com",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/netease-songs/, "/api/song/detail/"),
-      },
+      "/netease-search": neteaseProxy((path) => path.replace(/^\/netease-search/, "/api/search/get/web")),
+      "/netease-album": neteaseProxy((path) => path.replace(/^\/netease-album/, "/api/v1/album")),
+      "/netease-songs": neteaseProxy((path) => path.replace(/^\/netease-songs/, "/api/song/detail/")),
     },
   },
   build: {

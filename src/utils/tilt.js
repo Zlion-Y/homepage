@@ -30,6 +30,19 @@ export function applyTilt(delay = 1500) {
       el.style.setProperty("--mx", `${((x / r.width) * 100).toFixed(1)}%`);
       el.style.setProperty("--my", `${((y / r.height) * 100).toFixed(1)}%`);
     };
+    let tiltRaf = 0;
+    let lastEvt = null;
+    // mousemove 逐事件读 getBoundingClientRect 是同步强制布局，改成
+    // 每帧合并一次：取这一帧最后一次鼠标位置计算，视觉无差、布局读取降一个量级
+    const queueTilt = (e) => {
+      lastEvt = e;
+      if (tiltRaf) return;
+      tiltRaf = requestAnimationFrame(() => {
+        tiltRaf = 0;
+        if (lastEvt) setTilt(lastEvt.clientX, lastEvt.clientY);
+        lastEvt = null;
+      });
+    };
     const reset = () => {
       fastTransition();
       el.style.transform = "";
@@ -37,7 +50,7 @@ export function applyTilt(delay = 1500) {
 
     // ── 桌面鼠标路径（触屏设备在 applyTilt 入口已 early-return，无需触屏分支）──
     el.addEventListener("mouseenter", fastTransition);
-    el.addEventListener("mousemove", (e) => setTilt(e.clientX, e.clientY));
+    el.addEventListener("mousemove", queueTilt);
     el.addEventListener("mouseleave", reset);
   };
 

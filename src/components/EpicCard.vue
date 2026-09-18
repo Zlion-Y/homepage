@@ -11,7 +11,7 @@
       <a
         v-for="g in games"
         :key="g.id"
-        href="https://store.epicgames.com/"
+        :href="g.link || 'https://store.epicgames.com/'"
         target="_blank"
         rel="noopener"
         class="game"
@@ -52,7 +52,7 @@ onMounted(async () => {
         const free = (res.data || []).filter((g) => g.is_free_now && g.title && g.cover).slice(0, 2);
         // 区分「无免费游戏」（null，不缓存）与「请求失败」（throw）
         return free.length
-          ? free.map((g) => ({ id: g.id, title: g.title, cover: g.cover, price: g.original_price_desc }))
+          ? free.map((g) => ({ id: g.id, title: g.title, cover: g.cover, price: g.original_price_desc, link: g.link || "" }))
           : null;
       },
     });

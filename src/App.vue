@@ -77,7 +77,7 @@ const siteNameParts = computed(() => {
   const i = n.indexOf(".");
   return i > 0 ? [n.slice(0, i), n.slice(i)] : [n, ""];
 });
-// 站名手写体：config.siteFont 一行切换（?font= 参数可临时覆盖预览，见 src/fonts.js）
+// 站名手写体：config.siteFont 一行切换（可选值见 src/fonts.js）
 const siteFont = computed(() => currentSiteFont());
 
 const loading = ref(true);
@@ -192,7 +192,11 @@ onMounted(() => {
   }
 });
 
-onUnmounted(() => clearTimeout(returnTimer));
+onUnmounted(() => {
+  clearTimeout(returnTimer);
+  clearTimeout(closeTimer);
+  clearTimeout(panelAnimTimer);
+});
 </script>
 
 <style scoped>

@@ -39,7 +39,7 @@
             <button class="btn-mute" title="音量" aria-label="音量" @click="toggleMute">
               <Icon :name="isMuted || volume === 0 ? 'volume-x' : 'volume-2'" :size="16" />
             </button>
-            <div class="vol-track" @click="setVol">
+            <div class="vol-track" @pointerdown="volPointerDown">
               <div class="vol-fill" :style="{ width: (isMuted ? 0 : volume * 100) + '%' }"></div>
             </div>
           </div>
@@ -48,9 +48,9 @@
     </div>
 
     <!-- Progress -->
-    <div class="progress" @click="seek">
-      <div class="p-bar" :style="{ width: pct + '%' }"></div>
-      <div class="p-thumb" :style="{ left: pct + '%' }"></div>
+    <div class="progress" @pointerdown="progressDown">
+      <div class="p-bar" :style="{ width: displayPct + '%' }"></div>
+      <div class="p-thumb" :style="{ left: displayPct + '%' }"></div>
     </div>
 
     <p class="play-err" v-show="errTip">{{ errTip }}</p>
@@ -78,7 +78,7 @@
     <!-- Lyrics Drawer -->
     <div class="drawer lrc-drawer" :class="{ open: lrcOpen }">
       <div class="drawer-clip">
-        <div class="lrc-container" ref="lrcEl" @scroll="onUserLrcScroll">
+        <div class="lrc-container" ref="lrcEl" @scroll="onUserLrcScroll" @wheel="onLrcUserInput">
           <div
             v-for="(line, i) in lyrics"
             :key="i"
@@ -200,7 +200,7 @@
                 </div>
                 <!-- 歌词 / 播放列表（桌面端右侧栏；移动端覆盖封面视图） -->
                 <div class="fs-side">
-                  <div v-show="fsView === 'lyrics'" class="fs-lrc" :class="{ 'fs-lrc-scan': fsScan }" ref="fsLrcEl" @scroll="onFsLrcScroll">
+                  <div v-show="fsView === 'lyrics'" class="fs-lrc" :class="{ 'fs-lrc-scan': fsScan }" ref="fsLrcEl" @scroll="onFsLrcScroll" @wheel="onFsUserInput" @touchstart="onFsUserInput">
                     <div
                       v-for="(line, i) in lyrics"
                       :key="i"
@@ -261,9 +261,9 @@
 
               <div class="fs-prow">
                 <span class="fs-ptime">{{ fmt(currentTime) }}</span>
-                <div class="fs-progress" @click="seek">
-                  <div class="p-bar" :style="{ width: pct + '%' }"></div>
-                  <div class="p-thumb" :style="{ left: pct + '%' }"></div>
+                <div class="fs-progress" @pointerdown="progressDown">
+                  <div class="p-bar" :style="{ width: displayPct + '%' }"></div>
+                  <div class="p-thumb" :style="{ left: displayPct + '%' }"></div>
                 </div>
                 <span class="fs-ptime">{{ fmt(duration) }}</span>
               </div>
@@ -355,7 +355,8 @@ const fsCoverSrc = ref("");
 const fsWallpaper = ref("");
 const bgShown = ref(false); // 背景大图首次加载完成后淡入（此后原地换图不闪）
 let fsPrevBodyOverflow = "";
-// 官方封面解析缓存（会话内）：歌名 → 官方 picUrl，切回听过的歌不再重复请求
+// 官方封面解析缓存（会话内）：歌曲 ID → 官方 picUrl，切回听过的歌不再重复请求。
+// 走 memoSet 限长（LRU 语义），长会话听几百首也不会无界增长
 const fsCoverCache = new Map();
 // FluentPlayer 同款模式图标（填充路径）：顺序 / 单曲循环 / 随机
 const fsModeIcons = {
@@ -390,7 +391,7 @@ async function resolveFsCover() {
   // 批量详情已解析出官方直链（按歌曲 ID 精确匹配）：直接升到 1024，无需再按名字搜
   if (/music\.126\.net/.test(t.pic)) {
     const hd = neteasePic(t.pic, "1024y1024");
-    fsCoverCache.set(covKey, hd);
+    memoSet(fsCoverCache, covKey, hd);
     fsCoverSrc.value = hd;
     resolveDominantColor(covKey, neteasePic(hd, "64y64"), t); // 采样专用小图
     syncBgShown();
@@ -399,10 +400,13 @@ async function resolveFsCover() {
 
   // 官方封面：先按原名搜，搜不到再用去掉括号后缀（Live/伴奏/Cover 等）的名字搜
   let done = false;
+  // 整条搜索链的总预算：一轮"搜索+详情"超时就 8s，两组串行最坏 32s，封面不值得等这么久
+  const searchDeadline = Date.now() + 12000;
   try {
     const cleanName = (t.name || "").replace(/[（(【\[].*?[)）】\]]/g, "").trim();
     const queries = [t.name, cleanName].filter((q, i, a) => q && a.indexOf(q) === i);
     for (const q of queries) {
+      if (Date.now() > searchDeadline) break;
       const ctrl = new AbortController();
       setTimeout(() => ctrl.abort(), 8000);
       const search = await fetch(`/netease-search?s=${encodeURIComponent(q)}&type=1&limit=3`, { signal: ctrl.signal }).then((r) => r.json());
@@ -414,7 +418,7 @@ async function resolveFsCover() {
       const pic = detail?.album?.picUrl;
       if (!pic) continue;
       const hd = pic.replace(/^http:\/\//i, "https://") + "?param=1024y1024";
-      fsCoverCache.set(covKey, hd);
+      memoSet(fsCoverCache, covKey, hd);
       if (track.value === t) {
         fsCoverSrc.value = hd;
         resolveDominantColor(covKey, smallCover(hd), t);
@@ -454,7 +458,9 @@ function openFs() {
   document.body.style.overflow = "hidden"; // 全屏期间锁背景滚动
   resolveFsCover();
   syncBgShown();
-  fsQList.restart(); // 打开全屏就开始后台渐进铺队列，点列表时已就绪
+  // 打开全屏就开始后台渐进铺队列，点列表时已就绪。已铺满时别 restart——那会把
+  // 列表砍回首屏 chunk 重新排队，深处的当前曲在铺回来之前定位不到
+  if (!fsQList.isDone()) fsQList.restart();
   nextTick(() => {
     if (fsView.value === "lyrics") fsLrcFollow(true);
   });
@@ -467,7 +473,14 @@ function closeFs() {
 
 // E6 可访问性：Esc 关闭全屏（键盘退出，不依赖鼠标）
 function onFsEsc(e) {
-  if (e.key === "Escape" && fsOpen.value) closeFs();
+  if (e.key === "Escape" && fsOpen.value) {
+    closeFs();
+    // ⚠️必须拦下本次事件：每个 listener 跑完浏览器都会清一次微任务，closeFs 触发的
+    // Vue before-leave（摘 body.fs-open 类）在 MorePanel 的 Esc 监听执行**之前**就完成了，
+    // 它的类名守卫来不及生效，一次 Esc 会把面板也一起关掉。MusicCard 先于 MorePanel
+    // 挂载注册（子组件先 mounted），stopImmediatePropagation 拦得住。
+    e.stopImmediatePropagation();
+  }
 }
 
 // 全屏播放层整屏不透明（#0a0a0a + 整屏色洗），所以它盖住的主页与二级面板没必要继续合成。
@@ -536,7 +549,7 @@ async function resolveDominantColor(name, pic, t) {
     img.onerror = () => done(null);
     img.src = pic;
   });
-  if (color) fsDominantCache.set(name, color);
+  if (color) memoSet(fsDominantCache, name, color);
   if (!t || track.value === t) fsDominant.value = color; // 快速切歌时丢弃过期取色
 }
 
@@ -678,7 +691,13 @@ function fsPickQueue(i) {
 const fsQueueEl = ref(null);
 function scrollListToActive(container, activeEl) {
   if (!container || !activeEl) return;
-  container.scrollTop = activeEl.offsetTop - container.clientHeight / 2 + activeEl.offsetHeight / 2;
+  const center = () => {
+    container.scrollTop = activeEl.offsetTop - container.clientHeight / 2 + activeEl.offsetHeight / 2;
+  };
+  center();
+  // 离屏行在 content-visibility 下高度是估算值，大跨度跳转落地后真实布局会让目标
+  // 偏移一点；下一帧用渲染后的真实 offsetTop 校正一次
+  requestAnimationFrame(center);
 }
 function scrollPlaylistToActive() {
   // 当前行可能还没被渐进渲染出来，先补到它，再等 DOM 落地后定位
@@ -691,7 +710,9 @@ function scrollPlaylistToActive() {
 function scrollQueueToActive() {
   fsQList.ensure(index.value + 1);
   nextTick(() => {
-    const row = fsQueueEl.value?.children?.[index.value];
+    // .fs-queue 的第一个子元素是标题头（.fs-q-head），children[index] 会错位到上一行，
+    // 必须按类名取行
+    const row = fsQueueEl.value?.querySelectorAll(".fs-q-row")[index.value];
     scrollListToActive(fsQueueEl.value, row);
   });
 }
@@ -822,13 +843,13 @@ const plEl = ref(null);
 // 播放列表容器进入视口（首次打开面板）时定位当前行：
 // 二级面板默认 display:none，补齐完成的 onDone 定位时 offsetTop 读不到（=0），
 // 列表停在顶部；等容器真正可见再补一次定位。
+// ⚠️不要 disconnect：面板隐藏期间锁屏切歌（MediaSession nexttrack）触发的定位
+// 全写在 0 上，重开面板时必须再补一次，否则列表停在顶部、当前行不在视野里
 let plSeenObserver = null;
 watch(plEl, (el) => {
   if (plSeenObserver || !el || !("IntersectionObserver" in window)) return;
   plSeenObserver = new IntersectionObserver((entries) => {
     if (entries.some((e) => e.isIntersecting)) {
-      plSeenObserver.disconnect();
-      plSeenObserver = null;
       nextTick(() => scrollPlaylistToActive());
     }
   }, { threshold: 0.01 });
@@ -887,6 +908,10 @@ function makeProgressor(totalRef, chunk, onDone) {
         if (onDone) onDone();
       }
     },
+    // 补齐是否已完成（调用方据此决定要不要 restart，见 openFs）
+    isDone() {
+      return fillDone;
+    },
     // 要定位到某一行时先把它渲染出来（否则 children[i] 还不存在）
     ensure(n) {
       if (!fillDone) return;
@@ -929,13 +954,31 @@ function scheduleFsProgramEnd() {
   }, 80);
 }
 const fsScan = ref(false); // 手动滚动期间取消歌词模糊，便于点行调整进度
-// 移动端 timeupdate 稀疏（约 1Hz）导致高亮滞后/跳行，改用 rAF 高频驱动
+// 移动端 timeupdate 稀疏（约 1Hz）导致高亮滞后/跳行，改用 rAF 高频驱动。
+// 但移动端 audio.currentTime 本身也常按 ~1Hz 步进，rAF 每帧读到的仍是台阶值——
+// 表现就是歌词/进度永远比歌声慢半拍。所以再按真实时间在两次步进之间外插：
+// currentTime 一变就重新锚定；超过 1.2s 一步都没走（缓冲/卡顿）则放弃外插回吸
+// 实测值。桌面端 currentTime 平滑推进，每帧都命中重新锚定分支，外插不生效。
+let mediaAnchor = { at: 0, time: 0 };
+function mediaNow(a) {
+  const t = a.currentTime || 0;
+  const now = performance.now();
+  if (a.paused || t !== mediaAnchor.time || now - mediaAnchor.at > 1200) {
+    mediaAnchor = { at: now, time: t };
+    return t;
+  }
+  return mediaAnchor.time + (now - mediaAnchor.at) / 1000;
+}
 let lrcRaf = 0;
 function startLrcTicker() {
   if (lrcRaf) return;
   const tick = () => {
     const a = audioEl.value;
-    if (a && !a.paused) updateLrcHighlight(a.currentTime || 0);
+    if (a && !a.paused) {
+      const t = mediaNow(a);
+      currentTime.value = t; // 进度条也吃外插时钟：移动端不再 1Hz 跳格
+      updateLrcHighlight(t);
+    }
     lrcRaf = requestAnimationFrame(tick);
   };
   lrcRaf = requestAnimationFrame(tick);
@@ -966,6 +1009,13 @@ function hdCover(u) {
   return /music\.126\.net/.test(s) && !s.includes("param=") ? s + "?param=1024y1024" : s;
 }
 
+// 有上限的缓存写入（LRU 语义）：超过 max 删最旧一条，长会话也不会无界增长
+function memoSet(map, key, val, max = 200) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, val);
+  if (map.size > max) map.delete(map.keys().next().value);
+}
+
 // 主色提取只需要一张很小的图：拿 1024 封面去 drawImage 会强制解码整张大图
 // （主线程几十毫秒，切歌/开面板时掉帧）。换 64×64 变体后解码几乎无成本，
 // 而取色本来就降采样到 24×24 求均值，结果一致。
@@ -989,7 +1039,8 @@ function fmt(seconds) {
 function parseLRC(lrc) {
   if (!lrc) return [];
   const result = [];
-  const timeReg = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
+  // 小数位可选：部分歌词源给的是 [01:30] 这种无小数格式，写死必选会整行丢
+  const timeReg = /\[(\d{2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
   lrc.split("\n").forEach((line) => {
     const matches = Array.from(line.matchAll(timeReg));
     if (matches.length > 0) {
@@ -998,8 +1049,10 @@ function parseLRC(lrc) {
         matches.forEach((match) => {
           const m = parseInt(match[1]);
           const s = parseInt(match[2]);
-          const ms = parseInt(match[3]);
-          const time = m * 60 + s + ms / (match[3].length === 3 ? 1000 : 100);
+          const frac = match[3] || "";
+          const ms = frac ? parseInt(frac) : 0;
+          // 2 位 = 百分秒(/100)、3 位 = 毫秒(/1000)、1 位 = 十分秒(/10)
+          const time = m * 60 + s + ms / 10 ** frac.length;
           result.push({ time, text });
         });
       }
@@ -1159,7 +1212,7 @@ function loadLyrics(t) {
   try {
     const cached = localStorage.getItem(key);
     if (cached) {
-      lrcMem.set(key, cached);
+      memoSet(lrcMem, key, cached);
       applyLrcText(t, cached);
       return;
     }
@@ -1175,7 +1228,7 @@ function loadLyrics(t) {
     .then((r) => r.text())
     .then((text) => {
       if (text) {
-        lrcMem.set(key, text);
+        memoSet(lrcMem, key, text);
         try {
           localStorage.setItem(key, text);
         } catch {
@@ -1204,7 +1257,7 @@ function prefetchNextLyrics() {
     .then((r) => r.text())
     .then((text) => {
       if (text) {
-        lrcMem.set(key, text);
+        memoSet(lrcMem, key, text);
         try {
           localStorage.setItem(key, text);
         } catch {
@@ -1308,7 +1361,7 @@ async function resolveProxyUrl(t, ms = PROXY_TIMEOUT_MS) {
     // 部分音源返回 http 直链，https 页面下会被浏览器拦掉，统一升到 https
     const url = String((res && res.url) || "").replace(/^http:\/\//i, "https://");
     if (!url) throw new Error((res && (res.msg || res.error)) || "没有直链");
-    proxyMemo.set(id, { url, at: Date.now() });
+    memoSet(proxyMemo, id, { url, at: Date.now() });
     return url;
   } catch (e) {
     // 静默退回 Meting 候选链，提示只打一次：多半是 /api/url 没部署成功或音源全失效
@@ -1316,7 +1369,7 @@ async function resolveProxyUrl(t, ms = PROXY_TIMEOUT_MS) {
       proxyWarned = true;
       console.warn("[music] 音源解析失败，已退回 Meting：", e && e.message, "（打开 /api/health 看音源装载情况）");
     }
-    proxyMemo.set(id, { url: "", at: Date.now(), fail: true });
+    memoSet(proxyMemo, id, { url: "", at: Date.now(), fail: true });
     return "";
   } finally {
     clearTimeout(timer);
@@ -1677,16 +1730,52 @@ function onTime() {
   updateLrcHighlight(audio.currentTime || 0);
 }
 
-function seek(e) {
-  const audio = audioEl.value;
-  if (!audio || !duration.value) return;
-  const rect = e.currentTarget.getBoundingClientRect();
-  audio.currentTime = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1) * duration.value;
-}
-
 function seekTo(time) {
   const audio = audioEl.value;
   if (audio) audio.currentTime = time;
+}
+
+// ── 进度条拖拽（pointer 事件 + 捕获，点按与拖动统一走这一条路）──
+// 拖动中只更新本地预览（scrub），松手才真正 seek：逐 move 都 seek 会让音频
+// 在弱网下磕磕绊绊
+const scrub = ref(null); // 拖动中的预览进度（百分数）；null = 未在拖动
+const displayPct = computed(() => (scrub.value != null ? scrub.value : pct.value));
+
+function progressDown(e) {
+  const el = e.currentTarget;
+  try {
+    el.setPointerCapture(e.pointerId);
+  } catch {
+    // 不支持捕获就退化成点按
+  }
+  scrubMove(e);
+  el.onpointermove = scrubMove;
+  el.onpointerup = scrubUp;
+  el.onpointercancel = scrubUp;
+}
+
+function scrubMove(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const p = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+  scrub.value = p * 100;
+}
+
+function scrubUp(e) {
+  const el = e.currentTarget;
+  el.onpointermove = null;
+  el.onpointerup = null;
+  el.onpointercancel = null;
+  if (scrub.value == null) return;
+  // 以松手点为准提交：末尾的 pointermove 可能被浏览器合并而没落在真正的松手
+  // 位置，preview 会在松手前停在中途——松手事件本身一定带着最终坐标
+  let pct = scrub.value;
+  if (e.type === "pointerup" && typeof e.clientX === "number") {
+    const rect = el.getBoundingClientRect();
+    pct = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1) * 100;
+  }
+  const audio = audioEl.value;
+  if (audio && duration.value) audio.currentTime = (pct / 100) * duration.value;
+  scrub.value = null;
 }
 
 function toggleMute() {
@@ -1694,6 +1783,11 @@ function toggleMute() {
   if (!audio) return;
   isMuted.value = !isMuted.value;
   audio.muted = isMuted.value;
+  try {
+    localStorage.setItem("music_muted", isMuted.value ? "1" : "0");
+  } catch {
+    // 存储失败不影响播放
+  }
 }
 
 function setVol(e) {
@@ -1704,6 +1798,30 @@ function setVol(e) {
   audio.volume = volume.value;
   if (volume.value > 0) isMuted.value = false;
   audio.muted = isMuted.value;
+  try {
+    localStorage.setItem("music_volume", String(volume.value));
+    localStorage.setItem("music_muted", isMuted.value ? "1" : "0");
+  } catch {
+    // 存储失败不影响播放
+  }
+}
+
+// 音量条拖拽：pointer 捕获后 move 事件持续派发到轨道元素，按下即可滑动调音量
+function volPointerDown(e) {
+  const el = e.currentTarget;
+  try {
+    el.setPointerCapture(e.pointerId);
+  } catch {
+    // 不支持捕获就退化成点按
+  }
+  setVol(e);
+  el.onpointermove = setVol;
+  // 松手以松手点为准（末尾 move 可能被合并，同 scrubUp 的理由）
+  el.onpointerup = (ev) => {
+    if (ev.type === "pointerup") setVol(ev);
+    el.onpointermove = null;
+    el.onpointerup = null;
+  };
 }
 
 function toggleLrc() {
@@ -1735,6 +1853,16 @@ function onUserLrcScroll() {
   resetScrollTimeout();
 }
 
+// 用户滚轮/触摸 = 明确的手势意图：立刻终止进行中的程序滚动并进入抑制期。
+// 否则歌曲开头自动跟随的 900ms 平滑滚动还没结束，用户的滚动会被逐帧拉回目标位，
+// 表现就是"刚开曲滚动歌词来回抖动"（scroll 事件此时被程序滚动标志吞掉，拦不住）
+function onLrcUserInput() {
+  smoothToken++;
+  progScrollUntil = 0;
+  isUserScrolling = true;
+  resetScrollTimeout();
+}
+
 // 全屏歌词：用户手动滚动后暂停自动跟随 3 秒，再回正到当前句
 function onFsLrcScroll() {
   if (fsProgramScrolling) return; // 程序滚动（切词跟随/回正）期间的 scroll 不算用户滚动
@@ -1748,10 +1876,38 @@ function onFsLrcScroll() {
   }, 3000);
 }
 
+// 滚轮/触摸歌词区：与 onFsLrcScroll 同一套抑制，但由真实手势事件直触——
+// 不再依赖 scroll 事件绕过程序滚动标志（那是刚开曲抖动的根源，见 onLrcUserInput）
+function onFsUserInput() {
+  smoothToken++;
+  fsProgramScrolling = false;
+  clearTimeout(fsProgramEndTimer);
+  fsIsUserScrolling = true;
+  fsScan.value = true;
+  clearTimeout(fsScrollTimeout);
+  fsScrollTimeout = setTimeout(() => {
+    fsIsUserScrolling = false;
+    fsScan.value = false;
+    if (fsOpen.value && fsView.value === "lyrics" && lrcIndex.value !== -1) fsLrcFollow(false);
+  }, 3000);
+}
+
 onMounted(async () => {
   musicBus.register({ togglePlay, openFs });
   window.addEventListener("keydown", onFsEsc);
   bindMediaSession();
+  // 音量/静音记忆：刷新后还原用户上次的设置
+  try {
+    const savedVol = Number(localStorage.getItem("music_volume"));
+    if (savedVol >= 0 && savedVol <= 1) volume.value = savedVol;
+    isMuted.value = localStorage.getItem("music_muted") === "1";
+  } catch {
+    // 读取失败用默认值
+  }
+  if (audioEl.value) {
+    audioEl.value.volume = volume.value;
+    audioEl.value.muted = isMuted.value;
+  }
   watch(playing, (v) => {
     musicBus.syncPlaying(v);
     if ("mediaSession" in navigator) navigator.mediaSession.playbackState = v ? "playing" : "paused";
@@ -1800,6 +1956,15 @@ function bindMediaSession() {
     ms.setActionHandler("seekto", (d) => {
       const a = audioEl.value;
       if (a && d && d.seekTime != null) a.currentTime = d.seekTime;
+    });
+    // 锁屏/耳机上的快进快退键（±10s）
+    ms.setActionHandler("seekbackward", () => {
+      const a = audioEl.value;
+      if (a) a.currentTime = Math.max(0, a.currentTime - 10);
+    });
+    ms.setActionHandler("seekforward", () => {
+      const a = audioEl.value;
+      if (a) a.currentTime = Math.min(a.duration || Infinity, a.currentTime + 10);
     });
   } catch {
     // 不支持的动作或被禁用时静默跳过
@@ -1987,16 +2152,6 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-.btn-lrc {
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  padding: 2px 6px;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: color 0.25s ease;
-}
-
 .info-btns {
   display: flex;
   align-items: center;
@@ -2014,14 +2169,8 @@ onUnmounted(() => {
   transition: color 0.25s ease;
 }
 
-.btn-fs:hover,
-.btn-lrc:hover {
+.btn-fs:hover {
   color: var(--text);
-}
-
-.btn-lrc:hover,
-.btn-lrc.on {
-  color: var(--music-accent, var(--accent1));
 }
 
 .artist {
@@ -2076,6 +2225,8 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.14);
   cursor: pointer;
   position: relative;
+  /* 按住拖动调音量：不让浏览器把 pointermove 拿去当滚动 */
+  touch-action: none;
 }
 
 .vol-fill {
@@ -2179,15 +2330,6 @@ onUnmounted(() => {
 
 .btn-play:hover {
   filter: brightness(1.15);
-}
-
-.btn-play.playing {
-  background: var(--music-accent, var(--accent1));
-  color: #fff;
-}
-
-.btn-play .icon-play {
-  margin-left: 3px;
 }
 
 /* Drawers（grid-rows 过渡，对齐博客） */
@@ -2410,11 +2552,6 @@ onUnmounted(() => {
 .lrc-container::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 99px;
-}
-
-.tip-text {
-  color: var(--text-dim);
-  font-size: 0.84rem;
 }
 
 /* ── 全屏播放层（Apple Music 风格） ── */
@@ -2788,25 +2925,6 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-.fs-lrc-btn {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: background 0.25s ease;
-}
-
-.fs-lrc-btn.on {
-  background: rgba(255, 255, 255, 0.3);
-  color: #fff;
-}
-
 .fs-progress {
   height: 6px;
   border-radius: 3px;
@@ -2815,6 +2933,8 @@ onUnmounted(() => {
   position: relative;
   flex: 1;
   min-width: 0;
+  /* 按住拖动进度：触屏上别让 pointermove 触发页面滚动 */
+  touch-action: none;
 }
 
 .fs-progress .p-bar {
@@ -2931,17 +3051,6 @@ onUnmounted(() => {
   height: 24px;
 }
 
-
-.fs-vol-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #fff;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-}
 
 /* ── 桌面端全屏布局：左封面 右歌词/队列 ── */
 .fs-close {
@@ -3172,13 +3281,7 @@ onUnmounted(() => {
   margin-top: 0; /* 移动端的 14px 边距会把控制栏压低造成与两侧信息不对齐 */
 }
 
-.fs-btn.on,
-.fs-side-btn.on,
-.fs-queuebtn.on {
-  color: var(--music-accent, var(--accent1));
-}
-
-.fs-btn.on {
+.fs-side-btn.on {
   color: var(--music-accent, var(--accent1));
 }
 
@@ -3218,10 +3321,20 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  /* ⚠️不要用 flex 列布局排这些行：Chrome 的 content-visibility 占位尺寸
+     （contain-intrinsic-size）在 flex 主轴上不生效——离屏行会塌成纯 padding 高
+     （实测 16px vs 真实 62px），滚动时高度随渲染增减漂移，定位永远不准。
+     block 流下占位正常，行距用 margin 补回（原来是 gap: 10px）。 */
+  display: block;
   padding-right: 8px;
+}
+
+.fs-queue > .fs-q-head {
+  margin-bottom: 10px;
+}
+
+.fs-queue > .fs-q-row {
+  margin-bottom: 10px;
 }
 
 .fs-queue::-webkit-scrollbar {
@@ -3241,9 +3354,11 @@ onUnmounted(() => {
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.2s ease;
-  /* 同 .pl-item：全屏队列也是 410 行，离屏行不进布局；42px 是封面内容盒高度 */
+  /* 同 .pl-item：全屏队列也是 410 行，离屏行不进布局；占位值量的是内容盒（不含
+     padding）——封面 46px 就是内容盒高度，填行高 62px 会让每行占位偏大、
+     offsetTop 累积漂移，深处的行定位不准 */
   content-visibility: auto;
-  contain-intrinsic-size: auto 42px;
+  contain-intrinsic-size: auto 46px;
 }
 
 .fs-q-row:hover {
@@ -3303,30 +3418,6 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* 移动端全屏视图切换按钮 */
-.fs-view-btns {
-  display: flex;
-  gap: 10px;
-}
-
-.fs-view-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: background 0.25s ease;
-}
-
-.fs-view-btn.on {
-  background: rgba(255, 255, 255, 0.3);
-  color: #fff;
 }
 
 /* 进出场：上滑淡入 */

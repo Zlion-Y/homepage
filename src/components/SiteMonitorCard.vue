@@ -1,5 +1,5 @@
 <template>
-  <div class="glass monitor">
+  <div class="glass monitor" ref="rootEl">
     <div class="head">
       <span class="head-left">
         <Icon name="wifi" :size="15" />
@@ -49,8 +49,11 @@ const sites = ref(
   targets.map((t) => ({ ...t, state: "checking", ms: 0 }))
 );
 const lastRun = ref("");
+const rootEl = ref(null);
 
 let timer = null;
+let monitorIo = null;
+let inView = false;
 
 const upCount = computed(() => sites.value.filter((s) => s.state === "up").length);
 
@@ -78,7 +81,9 @@ async function probe(s) {
 }
 
 async function runAll() {
-  sites.value.forEach((s) => (s.state = "checking"));
+  // 不再全量重置为 checking：有上次结果的行保留旧状态直到各自探测完成——
+  // 否则每轮探测（含进入面板那一刻）所有状态灯先全闪一遍黄再变色。
+  // 首次探测时初始值本来就是 checking，不受影响。
   await Promise.all(sites.value.map((s) => probe(s)));
   lastRun.value = new Date().toTimeString().slice(0, 5);
   // 写缓存：重开面板 60 秒内可即时上屏
@@ -98,7 +103,7 @@ async function runAll() {
 
 onMounted(async () => {
   if (!targets.length) return;
-  // 先用上次检测结果即时上屏（60 秒内有效），再后台刷新
+  // 先用上次检测结果即时上屏（60 秒内有效），后台再刷新
   try {
     const cached = JSON.parse(localStorage.getItem("site_monitor") || "null");
     if (cached && Date.now() - cached.ts < 60 * 1000) {
@@ -113,11 +118,30 @@ onMounted(async () => {
   } catch {
     // 缓存解析失败则直接探测
   }
-  runAll();
-  timer = setInterval(runAll, 60 * 1000);
+  // 卡片常驻在默认隐藏的二级面板里：用户没进面板就不该每分钟白探测。
+  // 进入视口才开测（并立即刷一次），离开视口/页面隐藏时跳过周期探测
+  if ("IntersectionObserver" in window && rootEl.value) {
+    monitorIo = new IntersectionObserver(
+      (entries) => {
+        inView = entries.some((e) => e.isIntersecting);
+        if (inView) runAll();
+      },
+      { threshold: 0.05 }
+    );
+    monitorIo.observe(rootEl.value);
+  } else {
+    inView = true;
+    runAll();
+  }
+  timer = setInterval(() => {
+    if (inView && !document.hidden) runAll();
+  }, 60 * 1000);
 });
 
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => {
+  clearInterval(timer);
+  if (monitorIo) monitorIo.disconnect();
+});
 </script>
 
 <style scoped>

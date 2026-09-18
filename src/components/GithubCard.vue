@@ -68,7 +68,7 @@ onMounted(async () => {
     const p = await cachedFetch({
       key: "github_profile_v1",
       ttl: 60 * 60 * 1000,
-      isFresh: (c) => !!c.data.login,
+      isFresh: (c) => !!c.data.login && Date.now() - c.ts < 60 * 60 * 1000,
       timeout: 10000,
       loader: async (signal) => {
         const u = await fetch(`https://api.github.com/users/${user}`, { signal }).then((r) => {
