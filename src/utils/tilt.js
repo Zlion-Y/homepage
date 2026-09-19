@@ -58,4 +58,19 @@ export function applyTilt(delay = 1500) {
   setTimeout(() => {
     document.querySelectorAll(".glass").forEach(bind);
   }, delay);
+
+  // 迟到的卡片补绑：部分卡片是数据到位后才渲染的（如天气卡 v-if="weather"，
+  // 接口慢于绑定时机时整卡才插入 DOM），一次性 querySelectorAll 会永久漏掉它们。
+  // 监听后续插入的节点，凡带 .glass 就补绑（_tiltBound 防重复；非 .glass 的插入
+  // 如音乐列表行在这里只做一次 classList 判断即返回，开销可忽略）
+  const mo = new MutationObserver((muts) => {
+    for (const m of muts) {
+      m.addedNodes.forEach((n) => {
+        if (n.nodeType !== 1) return;
+        if (n.classList && n.classList.contains("glass")) bind(n);
+        if (n.querySelectorAll) n.querySelectorAll(".glass").forEach(bind);
+      });
+    }
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
 }
