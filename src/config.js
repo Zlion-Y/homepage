@@ -42,12 +42,21 @@ export const siteConfig = {
   weatherCity: "",
   // 背景（可选）：留空 = 默认动态极光渐变。两种用法：
   //  1. 静态图：把图片放到 public/images/background.jpg 即自动生效，无需配置
-  //  2. 随机壁纸 API：填接口地址，每次打开页面随机换一张，加载失败自动回退极光渐变，如：
-  //     "https://www.dmoe.cc/random.php"   （二次元随机）
-  //     "https://t.alcy.cc/ycy"            （二次元随机）
-  //     "https://api.paugram.com/wall/"    （二次元随机）
-  //     "https://picsum.photos/1920/1080"  （风景随机，国外源国内较慢）
+  //  2. 随机壁纸 API：填接口地址，每次打开页面随机换一张，主源失败自动走 bgFallbacks
+  // 实测可用（2026-09，国内边缘节点，webp 小图，响应均 <0.8s）：
+  //     "https://t.alcy.cc/fj"             （风景横版）
+  //     "https://t.alcy.cc/ycy"            （二次元自适应，自动区分横竖屏）
+  //     "https://t.alcy.cc/pc"             （桌面横版）/ "mp" 手机竖版 / "ys" 原神
+  //     "https://wp.upx8.com/api.php?category=nature" （10 分类：nature/anime/game/city…）
+  //     "https://uapis.cn/api/v1/random/image?category=landscape" （landscape/acg/anime）
   bgApi: "https://uapis.cn/api/v1/image/bing-daily",
+  // 随机壁纸降级链（仅 bgApi 为远程接口时生效）：主源失败依次重试，全部失败回退极光渐变。
+  // 以下均实测存活且 <1s（2026-09）
+  bgFallbacks: [
+    "https://wp.upx8.com/api.php?category=nature",
+    "https://uapis.cn/api/v1/random/image?category=acg",
+    "https://www.loliapi.com/acg/",
+  ],
 
   /* ---------- 主页卡片开关 ---------- */
   // false = 隐藏对应卡片

@@ -6,7 +6,7 @@
       <span class="blob b3"></span>
       <span class="blob b4"></span>
     </div>
-    <img v-if="custom" :src="bgSrcRef" class="custom" alt="" />
+    <img v-if="custom" :src="bgSrcRef" class="custom" alt="" @error="onBgError" />
     <div v-if="custom" class="dim"></div>
     <div class="grain"></div>
   </div>
@@ -22,6 +22,11 @@ import { wallpaperUrl } from "@/utils/wallpaperBus";
 const bgSrc = siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
 const bgSrcRef = ref(bgSrc);
 const custom = ref(false);
+// 展示层加载失败（探针成功但展示请求挂了）时回退极光，别留一块深色底
+const onBgError = () => {
+  custom.value = false;
+  bgSrcRef.value = "";
+};
 
 // 极光背景随昼夜时段变色（黎明 / 白天 / 黄昏 / 夜晚）
 const palettes = {
@@ -57,11 +62,11 @@ onMounted(() => {
     // URL 解析失败不影响正常加载
   }
 
-  // 壁纸源降级链：配置源失败后依次重试备用源，全部失败才回退极光
-  const fallbacks = [
-    "https://t.alcy.cc/ycy",
-    "https://www.dmoe.cc/random.php",
-  ];
+  // 壁纸源降级链：主源失败后依次重试 config.bgFallbacks 里的备用源，全部失败才
+  // 回退极光渐变。链表在 config.js 维护；只放行 http(s)，防止误配本地路径混进远程链
+  const fallbacks = Array.isArray(siteConfig.bgFallbacks)
+    ? siteConfig.bgFallbacks.filter((u) => typeof u === "string" && /^https?:\/\//.test(u))
+    : [];
   const isRemote = /^https?:\/\//.test(bgSrc);
   const candidates = isRemote
     ? [bgSrc, ...fallbacks.filter((u) => u !== bgSrc)]
@@ -74,7 +79,19 @@ onMounted(() => {
     }
     const url = candidates[tried++];
     const img = new Image();
+    // 挂起兜底：源既不响应也不报错时 8s 判失败换下一个源（否则背景永远停在极光）
+    let settled = false;
+    const advance = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hangTimer);
+      loadBg();
+    };
+    const hangTimer = setTimeout(advance, 8000);
     img.onload = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hangTimer);
       custom.value = true;
       bgSrcRef.value = url;
       // 全屏播放器无封面时的背景兜底读这里（E5 解耦），替代 MusicCard 里的 DOM querySelector
@@ -91,8 +108,7 @@ onMounted(() => {
       );
       window.dispatchEvent(new Event("bg-ready"));
     };
-    // 失败换下一个源（加随机参数绕开失败缓存）
-    img.onerror = loadBg;
+    img.onerror = advance;
     img.src = url + (url.includes("?") ? "&" : "?") + "r=" + Math.random().toString(36).slice(2, 6);
   };
   loadBg();

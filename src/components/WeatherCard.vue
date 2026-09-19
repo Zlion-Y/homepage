@@ -58,6 +58,7 @@ const DESIGN_H = 104;
 
 const weather = ref(null);
 const forecast = ref([]);
+let retryTimer = null;
 
 /* ── 尺寸测量 ──
    原来写死 viewBox="0 0 300 104" + preserveAspectRatio="none"，等于让 300×104 的
@@ -96,6 +97,7 @@ watch(chartEl, (el) => {
 
 onBeforeUnmount(() => {
   if (ro) ro.disconnect();
+  clearTimeout(retryTimer);
 });
 
 // 有数据就渲染曲线容器（与尺寸是否量到无关，否则 ref 拿不到 → 永远量不到）
@@ -177,7 +179,7 @@ function smoothPath(pts) {
 onMounted(() => {
   // 30 分钟内直接用缓存，避免刷新必发请求；失败 3s 后重试一次
   load().then((ok) => {
-    if (!ok) setTimeout(() => load(), 3000);
+    if (!ok) retryTimer = setTimeout(() => load(), 3000);
   });
 });
 

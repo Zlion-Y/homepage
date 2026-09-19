@@ -1,5 +1,5 @@
 <template>
-  <div class="glass music" :style="{ &quot;--music-accent&quot;: musicAccent == null || musicAccent === &quot;&quot; ? undefined : (musicAccent) }">
+  <div class="glass music" :style="{ '--music-accent': musicAccent || undefined }">
     <!-- Loading Overlay -->
     <div class="loading-overlay" v-show="loading">
       <Icon name="refresh" :size="30" class="spin" />
@@ -14,7 +14,7 @@
             ref="coverImg"
             v-show="coverLoaded"
             class="cover-img"
-            :class="{ spinning: coverSpinning }"
+            :class="{ spinning: playing }"
             :src="cardCoverSrc"
             :style="{ animationPlayState: playing ? 'running' : 'paused' }"
             alt=""
@@ -148,7 +148,7 @@
       <!-- 被盖住的两层（主页 / 二级面板）的隐藏时机挂在 after-enter / before-leave 上：
            进场时播放层还是半透明带位移的，那一瞬间就把下层藏掉会看到"面板提前消失" -->
       <Transition name="fs" @after-enter="syncCovered" @before-leave="syncCovered">
-        <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop, 'fs-immersive': fsImmersive }" @touchstart="fsSwipeStart" @touchmove="fsSwipeMove" @touchend="fsSwipeEnd" :style="{ &quot;--music-accent&quot;: musicAccent == null || musicAccent === &quot;&quot; ? undefined : (musicAccent) }">
+        <div v-if="fsOpen" class="fs-player" :class="{ 'fs-desktop': fsDesktop, 'fs-immersive': fsImmersive }" @touchstart="fsSwipeStart" @touchmove="fsSwipeMove" @touchend="fsSwipeEnd" :style="{ '--music-accent': musicAccent || undefined }">
           <div class="fs-color-wash" :style="fsWashStyle"></div>
           <div class="fs-bg-wrap">
             <img
@@ -368,7 +368,11 @@ const fsModeIcon = computed(() => fsModeIcons[playMode.value] || fsModeIcons[0])
 // 模式 0 是 (index+1) % n，播到末尾会绕回第一首，叫"列表循环"而不是"顺序播放"
 const fsModeTitle = computed(() => ({ 0: "列表循环", 1: "单曲循环", 2: "随机播放" }[playMode.value] || "播放模式"));
 
+// 官方封面解析的超时定时器：切歌后旧的超时 abort 已无意义，进函数先清掉上一轮的
+let coverTimers = [];
 async function resolveFsCover() {
+  coverTimers.forEach(clearTimeout);
+  coverTimers = [];
   const t = track.value;
   fsWallpaper.value = currentWallpaper();
   if (!t || !t.pic) {
@@ -408,12 +412,14 @@ async function resolveFsCover() {
     for (const q of queries) {
       if (Date.now() > searchDeadline) break;
       const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 8000);
+      const searchTimer = setTimeout(() => ctrl.abort(), 8000);
+      coverTimers.push(searchTimer);
       const search = await fetch(`/netease-search?s=${encodeURIComponent(q)}&type=1&limit=3`, { signal: ctrl.signal }).then((r) => r.json());
       const albumId = search?.result?.songs?.[0]?.album?.id;
       if (!albumId) continue;
       const ctrl2 = new AbortController();
-      setTimeout(() => ctrl2.abort(), 8000);
+      const detailTimer = setTimeout(() => ctrl2.abort(), 8000);
+      coverTimers.push(detailTimer);
       const detail = await fetch(`/netease-album/${albumId}`, { signal: ctrl2.signal }).then((r) => r.json());
       const pic = detail?.album?.picUrl;
       if (!pic) continue;
@@ -992,7 +998,6 @@ function stopLrcTicker() {
 
 const track = computed(() => playlist.value[index.value] || { name: "音乐", artist: "未在播放" });
 const pct = computed(() => (duration.value ? (currentTime.value / duration.value) * 100 : 0));
-const coverSpinning = computed(() => playing.value);
 
 // 切歌时始终解析官方高清封面（主卡小封面与全屏共用，面板关闭也在后台预取）
 watch(track, () => {
@@ -1067,10 +1072,11 @@ let winnerApi = 0; // 本轮竞速胜出的源；单曲降级链优先复用它
 async function fetchPlaylistAll() {
   const id = siteConfig.musicPlaylist;
   const ctrls = [];
+  const timers = [];
   const tryOne = async (api, i) => {
     const ctrl = new AbortController();
     ctrls.push(ctrl);
-    setTimeout(() => ctrl.abort(), 4000);
+    timers.push(setTimeout(() => ctrl.abort(), 4000));
     const url = api.replace(":id", id).replace(":r", String(Math.random()));
     const data = await fetch(url, { signal: ctrl.signal }).then((r) => r.json());
     if (!Array.isArray(data) || !data.length) throw new Error("empty");
@@ -1094,6 +1100,7 @@ async function fetchPlaylistAll() {
     return tracks;
   } finally {
     ctrls.forEach((c) => c.abort()); // 胜出后取消其余源，不浪费带宽
+    timers.forEach(clearTimeout); // 悬着的 4s abort 定时器一并清掉
   }
 }
 
@@ -1223,7 +1230,10 @@ function loadLyrics(t) {
   // 切歌时中止上一首还在飞的歌词请求，避免晚到的响应覆盖当前歌词
   if (lrcAbort) lrcAbort.abort();
   lrcAbort = new AbortController();
-  const lrcTimer = setTimeout(() => lrcAbort && lrcAbort.abort(), 8000);
+  // 捕获本次调用的 controller 引用：8s 触发时若已切歌，lrcAbort 变量会指向
+  // 新歌的 controller，直接读变量有误杀新歌歌词请求的理论竞态
+  const myCtrl = lrcAbort;
+  const lrcTimer = setTimeout(() => myCtrl.abort(), 8000);
   fetch(t.lrc, { signal: lrcAbort.signal })
     .then((r) => r.text())
     .then((text) => {
@@ -1253,7 +1263,9 @@ function prefetchNextLyrics() {
     if (localStorage.getItem(key)) return;
   } catch {}
   prefetching = true;
-  fetch(next.lrc)
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000); // 挂死的预取不能永久堵住后续预取
+  fetch(next.lrc, { signal: ctrl.signal })
     .then((r) => r.text())
     .then((text) => {
       if (text) {
@@ -1266,7 +1278,10 @@ function prefetchNextLyrics() {
       }
     })
     .catch(() => {})
-    .finally(() => (prefetching = false));
+    .finally(() => {
+      clearTimeout(timer);
+      prefetching = false;
+    });
 }
 
 function updateLrcHighlight(time) {
@@ -1822,6 +1837,8 @@ function volPointerDown(e) {
     el.onpointermove = null;
     el.onpointerup = null;
   };
+  // 触屏中断（来电/手势冲突）时清掉残留 handler，否则之后指针扫过音量条会误改音量
+  el.onpointercancel = el.onpointerup;
 }
 
 function toggleLrc() {
@@ -2009,6 +2026,7 @@ onUnmounted(() => {
   audioEl.value?.pause();
   plList.stop();
   fsQList.stop();
+  coverTimers.forEach(clearTimeout);
   if (plSeenObserver) {
     plSeenObserver.disconnect();
     plSeenObserver = null;

@@ -95,38 +95,26 @@ export async function GET(request) {
     return json({ code: 1, msg: `没有可用音源实现 ${source}` }, { status: 503, extra: cors })
   }
 
-  try {
-    const r = await scheduler.resolveWithHedge({
-      source,
-      action: 'musicUrl',
-      info: { musicInfo, type: quality, quality },
-      hosts,
-      // 客户端断了就没必要继续问音源了：把 Vercel 的 AbortSignal 直接透传下去，
-      // 一次断连能立刻掐掉所有在飞的上游请求（省 Active CPU）。需要 vercel.json 开 supportsCancellation。
-      signal: request.signal,
-    })
-
-    let link = String(r.value || '').trim()
-    if (!link) throw new Error('音源返回空直链')
-    const rawLink = link
-    const wasHttp = /^http:\/\//i.test(link)
-    link = wasHttp ? 'https://' + link.slice(7) : link
+  /**
+   * 校验一个赢家：直链 SSRF 白名单 + 探活（含 B16 http 兜底）。
+   * 返回 { ok: true, r, link, verifyMs, verifySkipped } 或
+   * { ok: false, r, via, reason, url, st } —— 后者由调用方排除该源换下一家。
+   */
+  async function validateWinner(r, raw) {
+    const wasHttp = /^http:\/\//i.test(raw)
+    let link = wasHttp ? 'https://' + raw.slice(7) : raw
     // 直链本身也要过内网/元数据地址校验：脚本可能返回 http://169.254.169.254/... 这类
-    // "直链"——服务器拿它探活等于代为探测内网，下发给用户浏览器则变成对用户内网的
-    // 请求。判硬失败走降级链（换下一家音源）。
+    // "直链"——服务器拿它探活等于代为探测内网，下发给用户浏览器则变成对用户内网的请求
     try {
       await assertPublicHttpUrl(link)
     } catch (e) {
       console.warn(
         `[verify] 直链指向内网/非法地址 source=${source} via=${r.via} url=${link} err=${e && e.message}`
       )
-      const body = { code: 1, msg: '直链校验未通过', source }
-      if (wantDebug) body.trace = { ...trace(r), verify: 'blocked', url: link }
-      return json(body, { status: 502, extra: cors })
+      return { ok: false, r, via: r.via, reason: '直链指向内网/非法地址', url: link, st: 'blocked' }
     }
     let verifyMs = 0
     let verifySkipped = false
-
     if (process.env.VERIFY !== 'off') {
       // 探活三态：ok=可用 / soft=5xx 或超时（上游抖动，直链仍可信，放行）/ fail=硬失败
       const hostOf = (u) => {
@@ -163,11 +151,11 @@ export async function GET(request) {
       let st = p.st
       // B16：https 探活硬失败时回退探测原始 http 直链（部分平台 CDN 只有 http 可达）
       if (st === 'fail' && wasHttp) {
-        const p2 = await probe(rawLink)
+        const p2 = await probe(raw)
         probeMs += p2.ms
         if (p2.st !== 'fail') {
           st = p2.st
-          link = rawLink
+          link = raw
         }
       }
       verifyMs = probeMs
@@ -176,12 +164,59 @@ export async function GET(request) {
         console.warn(
           `[verify] 直链校验未通过 source=${source} via=${r.via} tries=${(r.tries || []).length} url=${link}`
         )
-        const body = { code: 1, msg: '直链校验未通过', source }
-        if (wantDebug) body.trace = { ...trace(r), verify: st, url: link }
-        return json(body, { status: 502, extra: cors })
+        return { ok: false, r, via: r.via, reason: '直链校验未通过', url: link, st }
       }
     }
+    return { ok: true, r, link, verifyMs, verifySkipped }
+  }
 
+  try {
+    // 换源降级：赢家直链指向内网、返回空链或探活硬失败时，排除该音源再对冲一轮；
+    // 最多两轮，两轮都失败才放弃（兑现"判硬失败走降级链"的承诺）
+    const excluded = new Set()
+    let winner = null
+    let lastFail = null
+    for (let attempt = 0; attempt < 2 && !winner; attempt++) {
+      const pool = hosts.filter((h) => !excluded.has(h.file))
+      if (!pool.length) break
+      const r = await scheduler.resolveWithHedge({
+        source,
+        action: 'musicUrl',
+        info: { musicInfo, type: quality, quality },
+        hosts: pool,
+        // 客户端断了就没必要继续问音源了：把 Vercel 的 AbortSignal 直接透传下去，
+        // 一次断连能立刻掐掉所有在飞的上游请求（省 Active CPU）。需要 vercel.json 开 supportsCancellation。
+        signal: request.signal,
+      })
+
+      const raw = String(r.value || '').trim()
+      if (!raw) {
+        lastFail = { r, via: r.via, reason: '音源返回空直链', st: 'empty' }
+        excluded.add(r.via)
+        continue
+      }
+      const v = await validateWinner(r, raw)
+      if (!v.ok) {
+        lastFail = v
+        excluded.add(r.via)
+        continue
+      }
+      winner = v
+    }
+
+    if (!winner) {
+      console.warn(
+        lastFail
+          ? `[url] 换源重试后仍失败: via=${lastFail.via} ${lastFail.reason}`
+          : '[url] 没有可用音源'
+      )
+      const body = { code: 1, msg: '音源未能给出可用直链', source }
+      if (wantDebug && lastFail) {
+        body.trace = { ...trace(lastFail.r), verify: lastFail.st ?? 'empty', url: lastFail.url }
+      }
+      return json(body, { status: 502, extra: cors })
+    }
+    const { r, link, verifyMs, verifySkipped } = winner
     const payload = { code: 0, source, quality, url: link }
     // trace.verifyMs 单独列出来：探活曾经吃掉 4 秒/曲（见 lib/verify.mjs 的说明），
     // 只看总耗时会把"赢家 1 秒返回、探活白等 4 秒"误判成"音源慢"
