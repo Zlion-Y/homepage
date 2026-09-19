@@ -1123,11 +1123,12 @@ function neteasePic(picUrl, size) {
 async function upgradeCovers(tracks) {
   const items = tracks.map((t) => ({ t, id: songIdOf(t) })).filter((x) => x.id);
   const CHUNK = 100;
+  const batchTimers = [];
   for (let i = 0; i < items.length; i += CHUNK) {
     const part = items.slice(i, i + CHUNK);
     try {
       const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 10000);
+      batchTimers.push(setTimeout(() => ctrl.abort(), 10000));
       const ids = encodeURIComponent("[" + part.map((x) => x.id).join(",") + "]");
       const res = await fetch(`/netease-songs?ids=${ids}`, { signal: ctrl.signal }).then((r) => r.json());
       const map = new Map((res.songs || []).map((x) => [String(x.id), (x.album && x.album.picUrl) || ""]));
@@ -1139,6 +1140,7 @@ async function upgradeCovers(tracks) {
       // 该批失败：保持原封面
     }
   }
+  batchTimers.forEach(clearTimeout);
 }
 
 // 歌单就绪后异步把整份歌单封面换成官方高清（后台进行，不阻塞展示）
@@ -1547,11 +1549,14 @@ function loadAndPlay(i, autoPlay = true) {
   prefetchNextLyrics();
   // 顺手把下一首的直链也解析掉（延迟一点发起，别和当前这首抢）：切歌时不必再等冷启动。
   // 随机模式下下一首不可预知，预取等于白花一次函数调用（与 prefetchNextTrack 的判断保持一致）。
+  // 1.5s 窗口内用户又切了歌就放弃本次预取（nx 是旧时刻算出的下一首）——比对的是
+  // 本次 loadAndPlay 的版本号；⚠️绝不能 ++loadVersion，那会让当前这首歌自己的
+  // 播放回调全部失配（实测：src 不被设置、无声）
   if (proxyEnabled() && playMode.value !== 2) {
     const nx = playlist.value[(i + 1) % playlist.value.length];
     if (nx && nx !== t) {
       setTimeout(() => {
-        if (proxyEnabled()) resolveProxyUrl(nx);
+        if (ver === loadVersion) resolveProxyUrl(nx);
       }, 1500);
     }
   }
@@ -1913,10 +1918,15 @@ onMounted(async () => {
   musicBus.register({ togglePlay, openFs });
   window.addEventListener("keydown", onFsEsc);
   bindMediaSession();
-  // 音量/静音记忆：刷新后还原用户上次的设置
+  // 音量/静音记忆：刷新后还原用户上次的设置。
+  // ⚠️先判键存在再 Number：Number(null)===0，直接转会把"从未设置过"的全新访客
+  // 音量强制归零（表现为首次播放完全无声）
   try {
-    const savedVol = Number(localStorage.getItem("music_volume"));
-    if (savedVol >= 0 && savedVol <= 1) volume.value = savedVol;
+    const rawVol = localStorage.getItem("music_volume");
+    if (rawVol !== null && rawVol !== "") {
+      const savedVol = Number(rawVol);
+      if (Number.isFinite(savedVol) && savedVol >= 0 && savedVol <= 1) volume.value = savedVol;
+    }
     isMuted.value = localStorage.getItem("music_muted") === "1";
   } catch {
     // 读取失败用默认值

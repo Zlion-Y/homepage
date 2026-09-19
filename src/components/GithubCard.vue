@@ -66,9 +66,12 @@ onMounted(async () => {
   // 缓存 1h（GitHub 官方 API 匿名限额 60 次/时/IP，缓存避免触顶）
   try {
     const p = await cachedFetch({
-      key: "github_profile_v1",
+      // 键绑定用户名：改配置里的 GitHub 用户名立即生效，不吃上一个用户的旧缓存
+      key: `github_profile_v1_${user}`,
       ttl: 60 * 60 * 1000,
-      isFresh: (c) => !!c.data.login && Date.now() - c.ts < 60 * 60 * 1000,
+      // 获星数来自匿名 search 接口（10 次/分限额，最易失败）：失败置 starsFailed
+      // 后该缓存不视为新鲜，下次挂载重拉，避免"获星 0"被固化一小时
+      isFresh: (c) => !!c.data.login && !c.data.starsFailed && Date.now() - c.ts < 60 * 60 * 1000,
       timeout: 10000,
       loader: async (signal) => {
         const u = await fetch(`https://api.github.com/users/${user}`, { signal }).then((r) => {
@@ -76,22 +79,26 @@ onMounted(async () => {
           return r.json();
         });
 
-        // 获星总数：分页搜索本人全部公开仓库求和（失败不影响其余数据）。
-        // 匿名 search API 单页最多 100 条，仓库 >100 时逐页取，最多 5 页兜底。
+        // 获星总数：分页搜索本人全部公开仓库求和（失败不影响其余数据，
+        // 但会标记 starsFailed——isFresh 据此不让坏结果在缓存里过夜）
         let stars = 0;
+        let starsFailed = false;
         try {
           for (let page = 1; page <= 5; page++) {
             const s = await fetch(
               `https://api.github.com/search/repositories?q=user:${user}&per_page=100&page=${page}`,
               { signal }
-            ).then((r) => (r.ok ? r.json() : null));
+            ).then((r) => {
+              if (!r.ok) throw new Error("search " + r.status);
+              return r.json();
+            });
             if (!s || !Array.isArray(s.items) || !s.items.length) break;
             // 只统计本人仓库（非 fork），fork 来的星属于原作者
             stars += s.items.filter((r) => !r.fork).reduce((n, r) => n + r.stargazers_count, 0);
             if (s.items.length < 100) break; // 不足一页说明翻完了
           }
         } catch {
-          // 获星数获取失败置 0
+          starsFailed = true; // 获星数获取失败置 0，但下次挂载会重拉
         }
 
         return {
@@ -102,6 +109,7 @@ onMounted(async () => {
           followers: u.followers,
           repos: u.public_repos,
           stars,
+          starsFailed,
         };
       },
     });

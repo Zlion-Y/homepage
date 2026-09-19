@@ -1,5 +1,5 @@
 <template>
-  <div class="more">
+  <div ref="rootEl" class="more">
     <div class="inner">
       <header class="top">
         <button class="back" @click="$emit('close')">
@@ -22,7 +22,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, nextTick } from "vue";
+import { computed, onMounted, onUnmounted, nextTick, ref } from "vue";
 import { applyTilt } from "@/utils/tilt";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
@@ -65,8 +65,12 @@ const gridRows = computed(
 );
 
 const emit = defineEmits(["close"]);
+const rootEl = ref(null);
 
 function onKey(e) {
+  // 面板隐藏（display:none，即一级界面）时不响应 Esc——否则首页按 Esc 也会空跑
+  // 一遍关闭状态机，给 closePanel 的后续副作用埋雷。全屏播放器的优先级守卫见下。
+  if (rootEl.value && rootEl.value.style.display === "none") return;
   // 全屏播放器开着时把 Esc 让给它（先关全屏，再按一次才关面板）。
   // 主防线在 MusicCard.onFsEsc 的 stopImmediatePropagation（body.fs-open 类会在
   // 同一次按键内被 before-leave 摘掉，这里查类只是双保险，拦"离开动画期间的二次 Esc"）。

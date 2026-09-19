@@ -192,13 +192,13 @@ export async function GET(request) {
       const raw = String(r.value || '').trim()
       if (!raw) {
         lastFail = { r, via: r.via, reason: '音源返回空直链', st: 'empty' }
-        excluded.add(r.via)
+        excluded.add(r.via.file)
         continue
       }
       const v = await validateWinner(r, raw)
       if (!v.ok) {
         lastFail = v
-        excluded.add(r.via)
+        excluded.add(r.via.file) // ⚠️按 file 字符串排除——加 host 对象的话过滤永远查不到
         continue
       }
       winner = v

@@ -22,10 +22,14 @@ import { wallpaperUrl } from "@/utils/wallpaperBus";
 const bgSrc = siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
 const bgSrcRef = ref(bgSrc);
 const custom = ref(false);
-// 展示层加载失败（探针成功但展示请求挂了）时回退极光，别留一块深色底
+// 展示层加载失败（探针成功但展示请求挂了）时回退极光，别留一块深色底。
+// 同时清掉已写入的面板壁纸层与全屏兜底引用——否则那两处还指着加载失败的
+// 坏 URL，与首页"已回退极光"的状态不一致
 const onBgError = () => {
   custom.value = false;
   bgSrcRef.value = "";
+  wallpaperUrl.value = "";
+  document.documentElement.style.removeProperty("--bg-src");
 };
 
 // 极光背景随昼夜时段变色（黎明 / 白天 / 黄昏 / 夜晚）

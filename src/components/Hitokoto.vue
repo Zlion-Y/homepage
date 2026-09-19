@@ -1,11 +1,14 @@
 <template>
-  <div
-    class="glass hito"
-    :class="{ busy: loading }"
-    role="button"
-    aria-label="点击换一句"
-    @click="load"
-  >
+    <div
+      class="glass hito"
+      :class="{ busy: loading }"
+      role="button"
+      tabindex="0"
+      aria-label="点击换一句"
+      @click="load"
+      @keydown.enter.prevent="load"
+      @keydown.space.prevent="load"
+    >
     <p class="text">{{ sentence.text }}</p>
     <p class="from" v-if="sentence.from">—— 「{{ sentence.from }}」</p>
   </div>
@@ -27,9 +30,9 @@ const loading = ref(false);
 async function load() {
   if (loading.value) return;
   loading.value = true;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(
       "https://v1.hitokoto.cn/?c=a&c=b&c=d&c=i&c=k&max_length=40",
       { signal: ctrl.signal }
@@ -42,6 +45,7 @@ async function load() {
     const pick = fallbacks[Math.floor(Math.random() * fallbacks.length)];
     sentence.value = pick;
   } finally {
+    clearTimeout(timer);
     loading.value = false;
   }
 }

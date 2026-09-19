@@ -50,7 +50,7 @@ import { cachedFetch } from "@/utils/cachedFetch";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
 
-const CACHE_KEY = "weather_cache";
+const CACHE_KEY = `weather_cache_${siteConfig.weatherCity || "ip"}`; // 键绑定城市配置：改配置立即生效不吃旧缓存
 const CACHE_MS = 30 * 60 * 1000; // 30 分钟
 /* 原设计的基准高度：所有纵向坐标都是按 104 高画的，这里保留为比例基准，
    实测高度变了就等比映射，曲线的相对位置不变（bh=104 时逐像素等同原渲染）。 */
