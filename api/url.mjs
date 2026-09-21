@@ -98,7 +98,8 @@ export async function GET(request) {
   /**
    * 校验一个赢家：直链 SSRF 白名单 + 探活（含 B16 http 兜底）。
    * 返回 { ok: true, r, link, verifyMs, verifySkipped } 或
-   * { ok: false, r, via, reason, url, st } —— 后者由调用方排除该源换下一家。
+   * { ok: false, r, via, reason, url, st, hard } —— 后者由调用方排除该源换下一家；
+   * hard=true 才是"这条链对谁都不通"（404/410/451、指向内网），hard=false 只是"机房探活没过"。
    */
   async function validateWinner(r, raw) {
     const wasHttp = /^http:\/\//i.test(raw)
@@ -111,7 +112,7 @@ export async function GET(request) {
       console.warn(
         `[verify] 直链指向内网/非法地址 source=${source} via=${r.via} url=${link} err=${e && e.message}`
       )
-      return { ok: false, r, via: r.via, reason: '直链指向内网/非法地址', url: link, st: 'blocked' }
+      return { ok: false, r, via: r.via, reason: '直链指向内网/非法地址', url: link, link, st: 'blocked', hard: true }
     }
     let verifyMs = 0
     let verifySkipped = false
@@ -135,7 +136,14 @@ export async function GET(request) {
           await verifyDirectLink(u, { timeout: VERIFY_TIMEOUT_MS })
           out = { st: 'ok' }
         } catch (e) {
-          out = { st: e.hard === false ? 'soft' : 'fail' }
+          // 只有明确的硬证据（hardErr：404/410/451、直链指向内网）才判死；其余一切——网络错误、
+          // 超时，乃至探活实现里的意外异常——都不构成"链接已死"的证据，一律按可疑处理（照发）。
+          // 这条 fail-safe 是 2026-09-21 那个 `classify(second.v)` 的 TypeError 教出来的：
+          // 一个取值笔误就能把机房侧所有候选判死，而日志里只留一句"探活失败"、看不出原因。
+          if (e.hard !== true && e.hard !== false) {
+            console.warn(`[verify] 探活异常（按可疑处理）: ${(e && e.message) || e}`)
+          }
+          out = { st: e.hard === true ? 'fail' : 'soft' }
         }
         out.ms = Date.now() - t0
         // 把预算用满了 = 这台主机不回包 → 记下来，短时间内别再为它白等
@@ -149,12 +157,14 @@ export async function GET(request) {
       probeMs += p.ms
       verifySkipped = !!p.skipped
       let st = p.st
-      // B16：https 探活硬失败时回退探测原始 http 直链（部分平台 CDN 只有 http 可达）
-      if (st === 'fail' && wasHttp) {
+      // B16：https 侧没探通过时回退探测原始 http 直链（部分平台 CDN 只有 http 可达）。
+      // 不只"硬失败"——403/413 这类可疑判定也可能只是 https 侧的策略，http 能过就用 http；
+      // 两条都不通过时保留 https 形式（前端会把 http 直链升成 https，发 http 没有意义）
+      if (st !== 'ok' && wasHttp) {
         const p2 = await probe(raw)
         probeMs += p2.ms
-        if (p2.st !== 'fail') {
-          st = p2.st
+        if (p2.st === 'ok') {
+          st = 'ok'
           link = raw
         }
       }
@@ -162,20 +172,29 @@ export async function GET(request) {
       if (st === 'fail') {
         // 细节只进 Runtime Logs，不对外暴露 via/tries（C4）——除非显式 ?debug=1
         console.warn(
-          `[verify] 直链校验未通过 source=${source} via=${r.via} tries=${(r.tries || []).length} url=${link}`
+          `[verify] 直链校验未通过 source=${source} via=${r.via.file} tries=${(r.tries || []).length} url=${link}`
         )
-        return { ok: false, r, via: r.via, reason: '直链校验未通过', url: link, st }
+        return { ok: false, r, via: r.via, reason: '直链校验未通过', url: link, link, st, hard: true }
+      }
+      if (st !== 'ok') {
+        // 机房探活没过（403/413/超时/HTML…）：不当死链证据，交给调用方决定（无干净候选时照发）
+        console.warn(`[verify] 直链机房探活未通过 source=${source} via=${r.via.file} st=${st} url=${link}`)
+        return { ok: false, r, via: r.via, reason: '直链机房探活未通过', url: link, link, st, hard: false }
       }
     }
     return { ok: true, r, link, verifyMs, verifySkipped }
   }
 
   try {
-    // 换源降级：赢家直链指向内网、返回空链或探活硬失败时，排除该音源再对冲一轮；
-    // 最多两轮，两轮都失败才放弃（兑现"判硬失败走降级链"的承诺）
+    // 换源降级：赢家直链指向内网、返回空链或探活判死时，排除该音源再对冲一轮，最多两轮。
+    // 失败分两类（见 validateWinner 的 hard）：
+    //   hard —— 这条链对谁都不通（404/410/451、指向内网）：不能下发，继续换源，都没有就 502；
+    //   soft —— 只是**机房**探活没过（403/413/超时/HTML…）：机房判死 ≠ 访客判死，
+    //           留着当兜底，换源是想"顺手找条更干净的"，找不到就把它照发（verified:false）。
     const excluded = new Set()
     let winner = null
-    let lastFail = null
+    let hardFail = null
+    let suspect = null
     for (let attempt = 0; attempt < 2 && !winner; attempt++) {
       const pool = hosts.filter((h) => !excluded.has(h.file))
       if (!pool.length) break
@@ -191,36 +210,49 @@ export async function GET(request) {
 
       const raw = String(r.value || '').trim()
       if (!raw) {
-        lastFail = { r, via: r.via, reason: '音源返回空直链', st: 'empty' }
+        hardFail = { r, via: r.via, reason: '音源返回空直链', st: 'empty', hard: true }
         excluded.add(r.via.file)
         continue
       }
       const v = await validateWinner(r, raw)
       if (!v.ok) {
-        lastFail = v
-        excluded.add(r.via.file) // ⚠️按 file 字符串排除——加 host 对象的话过滤永远查不到
+        if (v.hard) hardFail = v
+        else if (!suspect) suspect = v // 保留第一家（排名最高的那次对冲的赢家）
+        excluded.add(v.via.file) // ⚠️按 file 字符串排除——加 host 对象的话过滤永远查不到
         continue
       }
       winner = v
     }
 
+    // 没有干净候选但有"机房判死"的：照发。访客在国内，链接对他是可用的（实测同一条链
+    // 机房 413 / 国内 200），而浏览器那边本来就会自己再探一次（playWithProbe 并发探活 +
+    // 逐候选降级 + 看门狗），真不通它会切到下一个候选。下发永远比 502 有用。
+    if (!winner && suspect) {
+      console.warn(`[url] 无干净候选，下发机房探活未通过的直链: via=${suspect.via.file} st=${suspect.st}`)
+      winner = { ...suspect, verified: false }
+    }
+
     if (!winner) {
       console.warn(
-        lastFail
-          ? `[url] 换源重试后仍失败: via=${lastFail.via} ${lastFail.reason}`
+        hardFail
+          ? `[url] 换源重试后仍失败: via=${hardFail.via.file} ${hardFail.reason}`
           : '[url] 没有可用音源'
       )
       const body = { code: 1, msg: '音源未能给出可用直链', source }
-      if (wantDebug && lastFail) {
-        body.trace = { ...trace(lastFail.r), verify: lastFail.st ?? 'empty', url: lastFail.url }
+      if (wantDebug && hardFail) {
+        body.trace = { ...trace(hardFail.r), verify: hardFail.st ?? 'empty', url: hardFail.url }
       }
       return json(body, { status: 502, extra: cors })
     }
-    const { r, link, verifyMs, verifySkipped } = winner
-    const payload = { code: 0, source, quality, url: link }
+    const { r, link, verifyMs, verifySkipped, verified } = winner
+    const payload = { code: 0, source, quality, url: link, verified: verified !== false }
     // trace.verifyMs 单独列出来：探活曾经吃掉 4 秒/曲（见 lib/verify.mjs 的说明），
     // 只看总耗时会把"赢家 1 秒返回、探活白等 4 秒"误判成"音源慢"
-    if (wantDebug) payload.trace = { ...trace(r), verifyMs, verifySkipped }
+    if (wantDebug) {
+      payload.trace = { ...trace(r), verifyMs, verifySkipped }
+      // verified:false 时补上机房侧的判定结果（soft=可疑/超时，blocked=被 SSRF 拦下…）
+      if (verified === false) payload.trace.verify = winner.st
+    }
     const res = json(
       payload,
       // C4：对外只保留泛化字段（trace 只在 ?debug=1 下出现，且不缓存）

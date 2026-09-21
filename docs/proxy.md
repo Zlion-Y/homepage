@@ -68,12 +68,40 @@ curl -s -H "Referer: https://你的域名" "https://你的域名/api/url?id=2873
 | `id` | 纯数字，≤19 位 | 也接受 `songmid` / `hash` / `rid`，另有 `name` `singer` `albumId` `albumName` `duration` `interval` 可选传给音源脚本 |
 | `debug` | `1` | 回吐逐音源溯源（`trace.via` 谁答的、`ms` 音源耗时、`verifyMs` 探活耗时、每家各花多久/错在哪），且**不缓存** |
 
-返回：成功 `{code:0, source, quality, url}`；失败 `{code:1, msg}`，
-状态码 400（参数）/ 502（解析或探活失败）/ 503（没有音源实现该平台）。
+返回：成功 `{code:0, source, quality, url, verified}`；失败 `{code:1, msg}`，
+状态码 400（参数）/ 502（解析失败或直链对谁都不通）/ 503（没有音源实现该平台）。
 
 > **`quality` 是请求、不是保证**：最终给到什么取决于哪家音源先答。实测同一首 320k 请求，
 > 有的源给 12.23MB、有的只给 4.89MB（128k 变体）。`sources/ranking.json` 里的 `samples[].q`
 > 就是为这个准备的（让低码率的源先答也不立刻采用）。
+
+### 探活的边界：`verified` 字段（2026-09-21）
+
+探活只否决**一种**情况——"文件本身没了"（HTTP 404 / 410 / 451，以及直链指向内网）。其余
+（401/403/413、其它 4xx、5xx、超时、网络错误、200+HTML）都只算"**机房侧**没探通"，照发：
+
+```json
+{ "code": 0, "source": "wy", "quality": "320k", "url": "https://iot102.music.126.net/…", "verified": false }
+```
+
+为什么不能拿机房判定当死链证据：探活跑在 Vercel（`hkg1`），链接是给**访客**用的，两者不是同一个
+取用方。实测同一条网易车机链（`iot*.music.126.net`，path 里的 token 解 base64 是
+`biz=iot&channel=netease&scene=andrcar`）**机房取用 HTTP 413 "Maximum message size exceeded"、
+国内住宅 IP 取用 200/206**（境外 HK/JP/SG/US/DE 五地节点复核全部 413；反向也成立——国内生成的
+`m801` 链从这些节点取用同样 413）。曾经把 `status >= 400` 一律判死链的后果是：某些 VIP 曲在站上
+永远放不出来（502 → 前端退回 Meting → 404），而**本地用同一个音源脚本一切正常**。
+
+机制上还有一层：音源脚本给出的**链接类别随请求方 IP 变**。星澜的 `WY_BACKENDS` 前 3 个后端
+并发、谁先成功用谁，国内 IP 走得通官方 eapi（给 `m801` 标准节点），机房走不通就退到第三方聚合
+后端（给车机链）。所以"机房拿到的不是同一条链"，本来就更容易撞上这类地域受限节点。
+
+下发 `verified:false` 的链接不是"赌"：前端 `playWithProbe()` 会用隐藏 `Audio` 在**访客自己的 IP**
+上并发探活全部候选、谁先出 metadata 播谁，失败还有逐候选降级与 4.5s 看门狗兜底——这个判定比
+机房的探活准得多。想看这次的判断依据：`?debug=1` 时 `trace.verify` 为 `soft`（机房未探通）或
+`fail`（真死链）。排查线上得先打 `?debug=1`，因为成功结果会被 CDN 缓存 15 分钟（见「缓存」）。
+
+> 这两条规则有测试钉住：`npm test` 是分类单测（注入响应、不走网络）；`npm run test:e2e` 会真的
+> 调一次 `/api/url`（需要外网），把 CDN 主机的响应按模式伪造成 413 / 404，验证"照发"与"502"两种处置。
 
 ### 访问控制：先同源、后 token（两道关，token 不能代替同源）
 
@@ -120,7 +148,7 @@ curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …  #
 | `URL_CACHE_SECONDS` | `900` | 直链解析结果的 CDN 边缘缓存秒数，命中缓存不进函数 |
 | `SOURCE_URLS` | 未设置 | 远端音源脚本地址（逗号分隔），改脚本不用重新部署 |
 | `DEBUG_HEADERS` | `0` | 设为 `1` 时成功响应带回 `x-music-via` / `x-music-ms`（哪家音源、耗时多少），排查用 |
-| `VERIFY` | 开启 | 设为 `off` 跳过直链探活（更快但可能返回死链） |
+| `VERIFY` | 开启 | 设为 `off` 跳过直链探活（更快，且省掉每曲约 0.9s 的等待与出口流量）。**现在探活只否决 404/410/451**（见「探活的边界」），所以关掉它的代价很小——只是少了一道"顺手换条更干净链"的筛选 |
 | `INVOKE_TIMEOUT_MS` | `9000` | 单个音源调用的超时，必须装进前端等得起的预算（前端 12s） |
 | `RESOLVE_FIRST_WAVE` | `4` | 第一波并发数：能被服务的音源未必排在最前，放宽第一波比每次只放 2 个快一整波 |
 | `RESOLVE_CONCURRENCY` | `2` | 分波下发时每波并发几个音源（第一波见上一行） |
