@@ -11,6 +11,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { cachedFetch } from "@/utils/cachedFetch";
+import { festivalParts, holidayPeriods } from "@/utils/festival";
 
 const now = ref(new Date());
 const lunarText = ref("");
@@ -31,51 +32,66 @@ const timeStr = computed(() => {
 
 const timeParts = computed(() => timeStr.value.split(":"));
 
-// 农历 + 下一个节日倒数（uapis，当天缓存）
+// 旧版缓存里存的是拼好的文本（用的日粒度 nearby，会把假期里的每一天都当成"距该节日 1 天"），
+// 形状与口径都变了，换 key 时顺手清掉，免得访客当天还读着旧结果
+try {
+  localStorage.removeItem("lunar_today");
+} catch {
+  // 忽略
+}
+
+// 假期区间：按年拉一次逐日数据，压成几段区间再落盘（原数据 128KB，压缩后只有几百字节）。
+// 12 月要连下一年一起看——否则 12/31 那天看不到第二天就是元旦。
+async function loadHolidayPeriods(now) {
+  const y = now.getFullYear();
+  const years = now.getMonth() === 11 ? [y, y + 1] : [y];
+  const loaded = await Promise.all(
+    years.map((yy) =>
+      cachedFetch({
+        key: `holiday_periods_${yy}`,
+        // key 带年份，同一年内一直复用；空结果不落缓存（下次再试）
+        isFresh: (c) => Array.isArray(c.data?.periods) && c.data.periods.length > 0,
+        loader: async (signal) => {
+          const j = await fetch(
+            `https://uapis.cn/api/v1/misc/holiday-calendar?year=${yy}`,
+            { signal }
+          ).then((r) => r.json());
+          const periods = holidayPeriods(j.days);
+          if (!periods.length) throw new Error("假期数据为空");
+          return { periods };
+        },
+      })
+    )
+  );
+  return loaded.flatMap((x) => (x && x.periods) || []);
+}
+
+// 农历 + 节日倒数（uapis，农历按天缓存）
 onMounted(async () => {
   timer = setInterval(() => (now.value = new Date()), 1000);
 
   const d = new Date();
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const p = (n) => String(n).padStart(2, "0");
+  const today = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   try {
-    const data = await cachedFetch({
-      key: "lunar_today",
-      isFresh: (c) => c.data.date === today && !!c.data.text,
-      loader: async (signal) => {
-        const [lunar, holiday] = await Promise.all([
-          fetch("https://uapis.cn/api/v1/misc/lunartime", { signal }).then((r) => r.json()),
-          fetch(
-            `https://uapis.cn/api/v1/misc/holiday-calendar?date=${today}&include_nearby=true&exclude_past=true&nearby_limit=3`,
-            { signal }
-          ).then((r) => r.json()),
-        ]);
-
-        // 接口可能返回 200 但字段缺失：缺字段不拼“undefined”，判为失败走静默隐藏
-        const monthDay = `${lunar.lunar_month_cn || ""}${lunar.lunar_day_cn || ""}`.trim();
-        const ganzhi = `${lunar.ganzhi_year || ""}${lunar.zodiac || ""}`;
-        const parts = [];
-        if (monthDay) parts.push(`农历${monthDay}`);
-        if (ganzhi) parts.push(`${ganzhi}年`);
-        if (!parts.length) return null;
-        // 过滤掉“补班上班日”和“节气”，只对真正的节日/假期倒数
-        const isReal = (e) => e.type !== "legal_workday_adjust" && e.type !== "solar_term";
-        const next = (holiday.nearby?.next || []).find((n) => n.events?.some(isReal));
-        if (next) {
-          const ev = next.events.find(isReal);
-          // 用 UTC 计算天差：接口日期是 UTC+8 语义，避免访客本地时区导致差 1 天
-          const [y, m, dd] = next.date.split("-").map(Number);
-          const target = Date.UTC(y, m - 1, dd);
-          const nd = new Date();
-          const todayUtc = Date.UTC(nd.getFullYear(), nd.getMonth(), nd.getDate());
-          const days = Math.round((target - todayUtc) / 86400000);
-          if (days > 0) parts.push(`距${ev.name} ${days} 天`);
-        }
-        return { date: today, text: parts.join(" · ") };
-      },
-    });
-    if (data) lunarText.value = data.text;
+    const [lunar, periods] = await Promise.all([
+      cachedFetch({
+        key: "lunar_today_v2",
+        isFresh: (c) => c.data.date === today && !!c.data.lunar,
+        loader: async (signal) => ({
+          date: today,
+          lunar: await fetch("https://uapis.cn/api/v1/misc/lunartime", { signal }).then((r) =>
+            r.json()
+          ),
+        }),
+      }),
+      loadHolidayPeriods(d),
+    ]);
+    // 接口可能返回 200 但字段缺失：缺字段不拼"undefined"，返回 null 走静默隐藏
+    const parts = festivalParts({ lunar: lunar && lunar.lunar, periods, now: new Date() });
+    if (parts) lunarText.value = parts.join(" · ");
   } catch {
-    // 农历获取失败静默隐藏
+    // 农历/假期获取失败静默隐藏
   }
 });
 

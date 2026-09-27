@@ -9,7 +9,8 @@
  *           应 code 0 + verified false + 仍然带 url（下发，交给访客侧浏览器判定）
  *   dead —— 一律 404（文件没了）：应 502，不允许下发
  *
- * 需要外网（音源后端 + 解析），跑法见 package.json 的 test:e2e。
+ * 需要外网（音源后端 + 解析），所以文件名用 .e2e.mjs —— `npm test` 扫 test/ 时不会把它算进去，
+ * 要单独跑见 package.json 的 test:e2e。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
