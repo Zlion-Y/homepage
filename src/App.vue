@@ -70,6 +70,7 @@ import SiteLinks from "@/components/SiteLinks.vue";
 import Footer from "@/components/Footer.vue";
 import { currentSiteFont } from "@/fonts";
 import { musicBus } from "@/utils/musicBus";
+import { whenFrostSettled } from "@/utils/frost";
 import { inject } from "@vercel/analytics";
 
 // 二级面板（含音乐播放器等全部面板卡片）独立分包：主页首屏不再为「多数访客不会
@@ -122,7 +123,8 @@ onMounted(() => {
   }
 
   // 载入动画与壁纸加载联动：壁纸就绪（且至少展示 0.8s）才进场，
-  // 壁纸过慢时 2.8s 兜底直接进场，避免卡片在极光上进场后壁纸再突兀换底
+  // 壁纸过慢时 2.8s 兜底直接进场，避免卡片在极光上进场后壁纸再突兀换底。
+  // 进场前还要等毛玻璃快照挂好（见下面 whenFrostSettled 的说明）。
   let started = false;
   const start = () => {
     if (started) return;
@@ -135,7 +137,19 @@ onMounted(() => {
   );
   const minWait = new Promise((res) => setTimeout(res, 800));
   const timeout = new Promise((res) => setTimeout(res, 2800));
-  Promise.race([Promise.all([bgReady, minWait]), timeout]).then(start);
+  // 揭幕门闩：快照必须在遮罩还完全不透明时就挂好。挂载瞬间卡片边缘会换一条
+  // 渲染路径（实时 backdrop-filter 取样 → 60px 出血的烘焙纹理），紧贴边框的
+  // 1~6px 亮度会变——揭幕后才挂，就是肉眼可见的「卡片边缘内侧变了一次」。
+  // 这一次 await 同时**触发**烘焙（whenFrostSettled 里跑的链是
+  // 等字体 → 等布局落定 → 量几何 → 烘焙）：所以不是"提前烘好在这儿零等待"，
+  // 而是"在这儿才烘"。快照必须量在布局落定之后——天气卡、RSS 列表是接口到位才
+  // 插入的，烘早了它们一进来就得重烘一次，那又是一次可见变化。
+  // 只兜 500ms 上限，超时照常揭幕，绝不让观感为它让路。
+  // ⚠️超时预算必须从 reveal 时刻起算：如果在外面就先建好这个 500ms 的 Promise，
+  // 壁纸慢于 800ms 时它早就烧完了，等于没兜底。
+  Promise.race([Promise.all([bgReady, minWait]), timeout])
+    .then(() => Promise.race([whenFrostSettled(), new Promise((res) => setTimeout(res, 500))]))
+    .then(start);
 
   // 自定义光标 + 鼠标涟漪
   if (siteConfig.clickEffect) {

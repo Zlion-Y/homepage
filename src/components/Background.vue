@@ -6,8 +6,8 @@
       <span class="blob b3"></span>
       <span class="blob b4"></span>
     </div>
-    <img v-if="custom" :src="bgSrcRef" class="custom" alt="" @error="onBgError" />
-    <div v-if="custom" class="dim"></div>
+    <img v-if="custom" :src="bgSrcRef" class="custom" :class="{ snap: bgSnap }" alt="" @error="onBgError" />
+    <div v-if="custom" class="dim" :class="{ snap: bgSnap }"></div>
     <div class="grain"></div>
   </div>
 </template>
@@ -15,13 +15,19 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
-import { wallpaperUrl } from "@/utils/wallpaperBus";
+import { wallpaperUrl, wallpaperSize } from "@/utils/wallpaperBus";
 
 // 背景源：配置的随机壁纸 API 优先，否则探测本地 public/images/background.jpg；
 // 都没有/加载失败则保持极光渐变
 const bgSrc = siteConfig.bgApi || `${import.meta.env.BASE_URL}images/background.jpg`;
 const bgSrcRef = ref(bgSrc);
 const custom = ref(false);
+// 壁纸在揭幕前就绪 → 直接铺上、不淡入。理由：那段时间整屏都被不透明的载入层
+// 盖着，0.7s 的淡入本来也没人看得见；铺满之后揭幕那一刻背景已是最终状态，
+// 卡片快照（frost 按最终壁纸烘焙）与实时 backdrop-filter 的基准才一致——
+// 否则会出现「卡片已按最终壁纸烘焙、背景还在从近黑淡入」的错配。
+// 晚于揭幕才到（2.8s 极光兜底之后）则保留淡入。
+const bgSnap = ref(false);
 // 展示层加载失败（探针成功但展示请求挂了）时回退极光，别留一块深色底。
 // 同时清掉已写入的面板壁纸层与全屏兜底引用——否则那两处还指着加载失败的
 // 坏 URL，与首页"已回退极光"的状态不一致
@@ -29,6 +35,7 @@ const onBgError = () => {
   custom.value = false;
   bgSrcRef.value = "";
   wallpaperUrl.value = "";
+  wallpaperSize.value = null;
   document.documentElement.style.removeProperty("--bg-src");
 };
 
@@ -162,12 +169,16 @@ onMounted(() => {
       if (settled) return;
       settled = true;
       clearTimeout(hangTimer);
+      // 揭幕（.page.ready 出现）之前就绪：遮罩还完全不透明，直接铺上不必淡入
+      bgSnap.value = !document.querySelector(".page.ready");
       custom.value = true;
       // 旧实现刻意让展示用"干净 URL"，结果探针那张图下载完即弃、展示图再下一张，
       // 每次打开页面壁纸都要下载两遍（随机 API 每次还可能给不同的图）。
       // 现在探针图即展示图：省一次下载，主页/面板/全屏三处仍是同一张图。
       // （随机性不受影响：每次访问的 r= 参数不同，依旧每次换一张。）
       bgSrcRef.value = probeUrl;
+      // 尺寸先于 URL 写入：frost 的 watcher 在同一个 tick 里就能拿到，不必再加载一次
+      wallpaperSize.value = { w: img.naturalWidth, h: img.naturalHeight };
       // 全屏播放器无封面时的背景兜底读这里（E5 解耦），替代 MusicCard 里的 DOM querySelector
       wallpaperUrl.value = new URL(probeUrl, location.href).href;
       // 把"实际展示的那张图"的地址挂到根变量，供二级面板复用。
@@ -327,6 +338,14 @@ onUnmounted(() => {
   to {
     opacity: 1;
   }
+}
+
+/* 揭幕前就绪的壁纸/压暗层直接铺上（不淡入）：那段时间整屏被不透明载入层盖着，
+   淡入根本看不见；而揭幕时背景已是最终状态，卡片 frost 快照的基准才与实时
+   backdrop-filter 一致（详见 script 里 bgSnap 的注释）。晚到的壁纸仍走淡入。 */
+.custom.snap,
+.dim.snap {
+  animation: none;
 }
 
 /* 颗粒层：原来带 mix-blend-mode: overlay。整屏混合模式是常驻开销——Chromium 要为它

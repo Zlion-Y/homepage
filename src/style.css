@@ -180,11 +180,11 @@ body.frost-desktop .glass {
   -webkit-backdrop-filter: none;
   /* ⚠️白边修复：overflow:hidden 把 ::after 裁在 padding 盒，半透明边框圈后面
      没有模糊取样（原版 backdrop-filter 的取样延伸到边框盒），透出未模糊的
-     原始壁纸形成细白边。改用 clip-path 裁到边框盒（快照得以铺到边框下），
-     overflow 放开；负 z 子级画在元素边框之上会盖掉边框，用 -1px 内缩 outline
-     在原位置重画（outline 画在层叠顶层、不受自身 clip-path 裁剪影响）。 */
+     原始壁纸形成细白边。裁剪改放在 ::after 自身（见下），overflow 放开；
+     负 z 子级画在元素边框之上会盖掉边框，用 -1px 内缩 outline 在原位置重画。
+     ⚠️裁剪不能放在卡片元素上：box-shadow 画在边框盒之外，clip-path 一上
+     投影整体消失——就是 frost 挂载瞬间「四周阴影没了」的光影变化。 */
   overflow: visible;
-  clip-path: inset(0 round var(--radius));
   outline: 1px solid var(--border);
   outline-offset: -1px;
   /* 倾斜结束后的图层降级会重光栅化一次，静止瞬间可见一帧细微变化；
@@ -192,17 +192,16 @@ body.frost-desktop .glass {
   will-change: transform;
 }
 
-/* 键盘焦点环：默认 frost 描边让位（offset -3px 使焦点环保持在 clip 盒内可见） */
-.glass.frost-ready:focus-visible {
-  outline: 2px solid var(--accent2);
-  outline-offset: -3px;
-}
-
 .glass.frost-ready::after {
   content: "";
   position: absolute;
   /* 超出卡片 60px 供模糊取边缘（frost.js 同步这个值） */
   inset: -60px;
+  /* 自裁到边框盒：伪元素原点在 padding 盒外 60px，边框盒再外扩 1px 边框
+     → inset 59px。clip-path 在 filter 之后应用（规格顺序），模糊采样仍吃满
+     60px 出血、边缘锐利；不裁在卡片元素上是为了保住 box-shadow（画在边框盒外，
+     裁在元素上投影整体消失——frost 挂载瞬间「四周阴影没了」的光影变化） */
+  clip-path: inset(59px round var(--radius));
   z-index: -1;
   pointer-events: none;
   filter: blur(14px) saturate(1.4);
