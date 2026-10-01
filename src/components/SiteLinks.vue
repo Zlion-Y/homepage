@@ -83,7 +83,7 @@ const cols = computed(() => {
   background: rgba(255, 255, 255, 0.06);
   color: #c7d2fe;
   flex-shrink: 0;
-  transition: all 0.3s ease;
+  transition: color 0.3s ease;
 }
 
 .site-card:hover .icon {

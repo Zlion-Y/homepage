@@ -48,7 +48,9 @@ export function initCursor() {
     show();
     mx = e.clientX;
     my = e.clientY;
-    dot.style.transform = `translate(${mx}px, ${my}px)`;
+    // 圆点不再逐事件写 transform：高回报率鼠标（500/1000Hz）每秒能塞进上千次
+    // 样式写入。合并进 ringLoop 的 rAF（每帧写最终位置，观感不变），事件里只
+    // 更新坐标与唤醒循环
     ringKick();
 
     // 移动超过一定距离泛起一圈小涟漪
@@ -85,6 +87,8 @@ export function initCursor() {
       rx = mx;
       ry = my;
     }
+    // 圆点即时跟随（无缓动），与外圈同帧写入
+    dot.style.transform = `translate(${mx}px, ${my}px)`;
     ring.style.transform = `translate(${rx}px, ${ry}px)`;
     if (settled) {
       ringRunning = false;

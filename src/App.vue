@@ -41,7 +41,9 @@
   <!-- 首次打开才挂载，之后只切显示：面板一卸载，里面的音乐卡就跟着销毁、<audio> 停播，
        所以改成「挂载一次后常驻」。display:none 期间浏览器不渲染，没有额外绘制开销。
        进/离场动画用自定义的 anim-in / anim-out 类驱动，不走 Vue 的 <Transition>——
-       v-if + v-show + Transition 三者叠加时离场会偶发卡住，面板点返回关不掉。 -->
+       v-if + v-show + Transition 三者叠加时离场会偶发卡住，面板点返回关不掉。
+       异步组件（defineAsyncComponent）只是把分包时机交给构建器，挂载后行为与同步版一致；
+       main.js 会在空闲时预取这个 chunk，正常点击时早已就绪。 -->
   <MorePanel
     :class="panelAnim ? 'anim-' + panelAnim : ''"
     :style="{ display: showMore ? '' : 'none' }"
@@ -51,17 +53,16 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, computed, defineAsyncComponent, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
 import { applyTilt } from "@/utils/tilt";
-import { firework, tip } from "@/utils/fx";
 import { initCursor } from "@/utils/cursor";
+import { usePanel } from "@/composables/usePanel";
 import Loading from "@/components/Loading.vue";
 import Background from "@/components/Background.vue";
 import LogoBadge from "@/components/LogoBadge.vue";
 import GreetCard from "@/components/GreetCard.vue";
 import BlogCard from "@/components/BlogCard.vue";
-import MorePanel from "@/components/MorePanel.vue";
 import Hitokoto from "@/components/Hitokoto.vue";
 import ClockCard from "@/components/ClockCard.vue";
 import WeatherCard from "@/components/WeatherCard.vue";
@@ -69,6 +70,11 @@ import SiteLinks from "@/components/SiteLinks.vue";
 import Footer from "@/components/Footer.vue";
 import { currentSiteFont } from "@/fonts";
 import { musicBus } from "@/utils/musicBus";
+import { inject } from "@vercel/analytics";
+
+// 二级面板（含音乐播放器等全部面板卡片）独立分包：主页首屏不再为「多数访客不会
+// 打开的面板」付出 JS 解析/执行成本。空空闲即预取（见 main.js），点击时基本已就绪。
+const MorePanel = defineAsyncComponent(() => import("@/components/MorePanel.vue"));
 
 // 站名拆成「主名 + 后缀」两段渲染：主名大字、后缀小一号（`.top` 这种 TLD），
 // 配上手写体就是导航站常见的那种艺术字观感（与 homepage 仓库同一套处理）
@@ -81,11 +87,8 @@ const siteNameParts = computed(() => {
 const siteFont = computed(() => currentSiteFont());
 
 const loading = ref(true);
-// 二级「探索更多」面板开关
-const showMore = ref(false);
-// 返回一级时给主页内容补一次浮起动画（见样式里的 .panel-return）
-const returning = ref(false);
-let returnTimer = null;
+// 二级面板状态机（开关/进离场动画类/Esc/烟花提示）
+const { showMore, returning, panelAnim, enterPanel, openPanel, closePanel } = usePanel();
 // 主页卡片开关（siteConfig.homeCards，缺省视为开启）
 const homeCards = {
   greet: siteConfig.homeCards?.greet !== false,
@@ -96,66 +99,14 @@ const homeCards = {
   siteLinks: siteConfig.homeCards?.siteLinks !== false,
 };
 
-// 面板进/离场的动画类：进场 1400ms 让卡片错峰浮起（末卡 5*100ms 延迟 + 0.85s 动画），
-// 离场 380ms 淡出 + 卡片沉下
-const panelAnim = ref("");
-let panelAnimTimer = null;
-
-function setPanelAnim(name, ms) {
-  clearTimeout(panelAnimTimer);
-  panelAnim.value = name;
-  panelAnimTimer = setTimeout(() => (panelAnim.value = ""), ms);
-}
-
-let closeTimer = null;
-function closePanel() {
-  clearTimeout(closeTimer);
-  setPanelAnim("out", 380);
-  // 延迟 380ms 再 display:none，让 anim-out 离场动画播完
-  closeTimer = setTimeout(() => { showMore.value = false; }, 380);
-}
-
-// 点击进入面板：在鼠标位置放一朵小烟花 + 冒一句提示（文案见 config.panelTips）
-const panelTips = Array.isArray(siteConfig.panelTips) ? siteConfig.panelTips.filter(Boolean) : [];
-let panelTipIdx = 0;
-
-function enterPanel(ev) {
-  clearTimeout(closeTimer);
-  // 键盘触发时没有坐标，就用入口元素中心
-  let x = ev && typeof ev.clientX === "number" ? ev.clientX : null;
-  let y = ev && typeof ev.clientY === "number" ? ev.clientY : null;
-  if (x === null) {
-    const el = ev && ev.currentTarget;
-    const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-    if (r) {
-      x = r.left + r.width / 2;
-      y = r.top + r.height / 2;
-    }
-  }
-  firework(x, y);
-  if (panelTips.length) {
-    tip(x, y, panelTips[panelTipIdx++ % panelTips.length]);
-  }
-  setPanelAnim("in", 1400);
-  showMore.value = true;
-}
-
-// 面板打开时锁定背景滚动；关闭时给主页补一次"浮起"接住二级卡片的依次沉下
-watch(showMore, (v) => {
-  document.body.style.overflow = v ? "hidden" : "";
-  if (!v) {
-    returning.value = true;
-    clearTimeout(returnTimer);
-    returnTimer = setTimeout(() => (returning.value = false), 520);
-  }
-});
-
 onMounted(() => {
+  // Initialize Vercel Web Analytics
+  inject();
+
   // 供欢迎卡「首页直接播放/全屏」：面板尚未构建时由它打开。
-  // showMore 的 watcher 会顺带把 panelBuilt 置 true、锁背景滚动。
+  // showMore 的 watcher（usePanel 内）会顺带锁背景滚动、注册 Esc。
   musicBus.setOpenPanel(() => {
-    setPanelAnim("in", 1400);
-    showMore.value = true;
+    openPanel();
   });
   // 历史遗留：早期版本把视图/全屏状态存在本地（刷新后停留原界面），现已去掉，顺手清掉这些键
   try {
@@ -193,9 +144,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  clearTimeout(returnTimer);
-  clearTimeout(closeTimer);
-  clearTimeout(panelAnimTimer);
+  // 面板状态机的定时器/Esc 清理在 usePanel 内部完成
 });
 </script>
 
@@ -246,9 +195,9 @@ onUnmounted(() => {
 }
 
 /* 二级面板过渡：面板本体不做任何动画。
-   它自带一张壁纸层，面板一动背景就整块跟着平移，非常假（上一版整屏滑动就是这么丑的）；
-   而面板背景与一级是同一张壁纸，所以"瞬间出现/消失"在视觉上本来就是无缝的。
-   真正的动效交给面板内部的卡片（依次浮起 / 反向沉下，见 MorePanel），
+   它自带一张壁纸层，面板只要一动，背景就跟着整块平移（非常假，这就是上一版
+   整屏滑动难看的原因）；而面板背景与一级是同一张壁纸，所以"瞬间出现/消失"在视觉上
+   本来就是无缝的。真正的动效交给面板内部的卡片（依次浮起 / 反向沉下，见 MorePanel），
    以及下面的"返回一级时主页内容轻轻浮起"。 */
 
 /* 从二级返回一级：二级卡片是依次沉下去的，主页若直接硬切出现会很生硬，

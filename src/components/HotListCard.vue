@@ -1,12 +1,8 @@
 <template>
   <div class="glass hot">
-    <div class="head">
-      <span class="head-left">
-        <Icon name="flame" :size="15" />
-        <span>热榜</span>
-      </span>
+    <CardHead icon="flame" title="热榜">
       <span class="update" v-if="updateTime">{{ updateTime }}</span>
-    </div>
+    </CardHead>
     <!-- 平台切换 -->
     <div class="tabs">
       <button
@@ -36,7 +32,7 @@
 import { ref, computed, onMounted } from "vue";
 import { cachedFetch } from "@/utils/cachedFetch";
 import { siteConfig } from "@/config";
-import Icon from "@/components/Icon.vue";
+import CardHead from "@/components/CardHead.vue";
 
 // 平台 key → 显示名（uapis hotboard 共支持 48 个，可按需增删）
 const LABELS = {
@@ -123,21 +119,6 @@ onMounted(() => switchTo(active.value));
   flex-direction: column;
 }
 
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.head-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
 .update {
   font-size: 0.68rem;
   color: var(--text-dim);
@@ -166,7 +147,7 @@ onMounted(() => switchTo(active.value));
   font-size: 0.72rem;
   white-space: nowrap;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease;
 }
 
 .tabs button:hover {

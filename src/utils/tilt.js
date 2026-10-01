@@ -4,6 +4,14 @@
 // delay：绑定延迟（主页面需等进场动画结束，动态挂载的面板传 0 立即绑定）
 import { siteConfig } from "@/config";
 
+// 卡片与全屏封面共用的 3D 倾斜姿态（手感对齐 FluentPlayer useCoverTilt）：
+// 最大倾角 5°（原 12°，按用户要求两轮调小）、透视 1000px、悬停微放大 1.02。改手感只动这里。
+export const TILT_MAX_ROTATE = 5;
+
+export function tiltTransform(rx, ry) {
+  return `perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`;
+}
+
 export function applyTilt(delay = 1500) {
   if (siteConfig.cardTilt === false) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -23,10 +31,9 @@ export function applyTilt(delay = 1500) {
       const y = clientY - r.top;
       const cx = r.width / 2;
       const cy = r.height / 2;
-      const maxRotate = 12;
-      const rx = -((y - cy) / cy) * maxRotate;
-      const ry = ((x - cx) / cx) * maxRotate;
-      el.style.transform = `perspective(1000px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`;
+      const rx = -((y - cy) / cy) * TILT_MAX_ROTATE;
+      const ry = ((x - cx) / cx) * TILT_MAX_ROTATE;
+      el.style.transform = tiltTransform(rx, ry);
       el.style.setProperty("--mx", `${((x / r.width) * 100).toFixed(1)}%`);
       el.style.setProperty("--my", `${((y / r.height) * 100).toFixed(1)}%`);
     };

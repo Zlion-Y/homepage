@@ -12,7 +12,7 @@
     <p class="hello">{{ hello }}</p>
     <h2>{{ siteConfig.greet }}</h2>
     <p class="desc" ref="descEl">
-      {{ display }}<span v-if="typing" class="caret"></span>
+      {{ display }}<span v-if="typing" class="caret" ref="caretEl"></span>
     </p>
     <span class="q close">”</span>
   </div>
@@ -56,6 +56,24 @@ let deleting = false;
 let timer = null;
 
 const descEl = ref(null);
+const caretEl = ref(null);
+
+// 打字机光标闪烁：JS 定步进驱动（250ms × 4 相位，与原 CSS steps(2,start) 的
+// 采样序列逐点一致：0.5 → 0 → 0.5 → 1）。
+// ⚠️不能用 CSS 无限动画：哪怕只是 2px 宽的光标，一条活跃动画也会让合成器
+// 每 vsync 出帧，拖着 13 张 backdrop-filter 毛玻璃卡整页重合成（实测贡献
+// ~1.4pt GPU，是壁纸模式下最后一个常驻动画）。JS 写 opacity 只在写入瞬间
+// 产生一帧，两次写入之间合成器完全静默。
+let caretTimer = null;
+let caretPhase = 0;
+function startCaretBlink() {
+  if (!typing || caretTimer) return;
+  const phases = [0.5, 0, 0.5, 1];
+  caretTimer = setInterval(() => {
+    if (document.hidden || !caretEl.value) return;
+    caretEl.value.style.opacity = phases[caretPhase++ % phases.length];
+  }, 250);
+}
 
 // 视口阻尼跟随文字头部：打字时平滑跟进、停顿期停在句尾（光标闪烁）、回退时平滑收回。
 // 只在文字/视口变化后跑 rAF，且目标宽度只在需要时重算——scrollWidth 是强制同步布局，
@@ -131,6 +149,7 @@ onMounted(() => {
   if (typing) {
     kickFollow();
     timer = setTimeout(tick, 3000);
+    startCaretBlink();
     window.addEventListener("resize", onResize);
   }
 });
@@ -138,6 +157,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(helloTimer);
   clearTimeout(timer);
+  clearInterval(caretTimer);
   if (rafId) cancelAnimationFrame(rafId);
   window.removeEventListener("resize", onResize);
 });
@@ -195,7 +215,7 @@ onUnmounted(() => {
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: color 0.3s ease, background 0.3s ease, transform 0.3s ease;
 }
 
 @media (hover: hover) {
@@ -229,7 +249,9 @@ onUnmounted(() => {
   transform: translateY(0.5em);
 }
 
-/* 打字机光标 */
+/* 打字机光标：不设 CSS 动画——闪烁由 script 里的 startCaretBlink 以 250ms×4 相位
+   （0.5/0/0.5/1，与原 steps(2,start) 采样序列一致）JS 驱动，避免常驻无限动画
+   让合成器每 vsync 出帧（见 script 内注释） */
 .caret {
   display: inline-block;
   width: 2px;
@@ -237,13 +259,7 @@ onUnmounted(() => {
   margin-left: 2px;
   vertical-align: -0.12em;
   background: var(--text-dim);
-  animation: caret-blink 1s steps(2, start) infinite;
-}
-
-@keyframes caret-blink {
-  50% {
-    opacity: 0;
-  }
+  opacity: 0.5;
 }
 
 /* 手机端卡片窄、文字顶边，缩小引号并加大上下 padding，让文字与引号分区不重叠 */

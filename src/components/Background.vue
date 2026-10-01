@@ -1,5 +1,5 @@
 <template>
-  <div class="bg" :style="paletteStyle" aria-hidden="true">
+  <div class="bg" ref="rootEl" :style="paletteStyle" aria-hidden="true">
     <div class="aurora" :class="{ idle: custom }">
       <span class="blob b1"></span>
       <span class="blob b2"></span>
@@ -55,6 +55,69 @@ function applyPalette() {
   paletteStyle.value = { "--a1": p[0], "--a2": p[1], "--a3": p[2], "--a4": p[3] };
 }
 
+// ── 极光漂移：JS 定步进驱动（替代原 CSS 无限动画）────────────────────
+// ⚠️这是全站 GPU 占用的最大单项（实测 2560×1392@120Hz 有头 Chrome：极光模式下
+// 4 条 CSS 无限漂移动画让合成器每 vsync 出帧，移动的光斑又使 13 张毛玻璃卡的
+// backdrop-filter 逐帧重取景，整页 3D 引擎烧到 ~80%）。改法：每 250ms 直接写一次
+// transform——46s 周期的缓速漂移每个步进只挪 ~0.5% 路程，肉眼不可辨，但两次写入
+// 之间合成器完全静默，帧率从 120/s 降到 4/s。
+const rootEl = ref(null);
+const DRIFTS = [
+  { tx: 9, ty: 7, s: 1.15, dur: 46000 },
+  { tx: -7, ty: 10, s: 0.9, dur: 52000 },
+  { tx: 6, ty: -9, s: 1.1, dur: 58000 },
+  { tx: -9, ty: -6, s: 1.2, dur: 40000 },
+];
+const DRIFT_STEP_MS = 250;
+let driftTimer = null;
+let blobEls = [];
+
+// CSS ease-in-out = cubic-bezier(0.42, 0, 0.58, 1)：与原动画的缓动逐点一致
+function makeCubicBezier(p1x, p1y, p2x, p2y) {
+  const cx = 3 * p1x, bx = 3 * (p2x - p1x) - cx, ax = 1 - cx - bx;
+  const cy = 3 * p1y, by = 3 * (p2y - p1y) - cy, ay = 1 - cy - by;
+  const sampleX = (t) => ((ax * t + bx) * t + cx) * t;
+  const sampleY = (t) => ((ay * t + by) * t + cy) * t;
+  const sampleDX = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  return (x) => {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const xx = sampleX(t) - x;
+      if (Math.abs(xx) < 1e-6) break;
+      const d = sampleDX(t);
+      if (Math.abs(d) < 1e-6) break;
+      t -= xx / d;
+    }
+    return sampleY(Math.min(1, Math.max(0, t)));
+  };
+}
+const easeInOut = makeCubicBezier(0.42, 0, 0.58, 1);
+
+function applyDrift(now = performance.now()) {
+  // 壁纸模式下极光 display:none（.aurora.idle），不写样式——display:none 子树的
+  // 样式写入不产生任何帧；页面隐藏时浏览器也不渲染，跳过纯属省心
+  if (custom.value || document.hidden) return;
+  for (let i = 0; i < blobEls.length; i++) {
+    const d = DRIFTS[i];
+    if (!d) break;
+    // infinite alternate：相位 0→2 往返，缓动每个方向各自施加（与 CSS 语义一致）
+    const phase = (now % (2 * d.dur)) / d.dur;
+    const p = easeInOut(phase < 1 ? phase : 2 - phase);
+    blobEls[i].style.transform =
+      `translate(${(d.tx * p).toFixed(3)}vw, ${(d.ty * p).toFixed(3)}vh) scale(${(1 + (d.s - 1) * p).toFixed(4)})`;
+  }
+}
+
+function startDrift() {
+  // 与原 @media (prefers-reduced-motion) 下 .blob 静止的行为一致
+  if (driftTimer || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  blobEls = rootEl.value ? [...rootEl.value.querySelectorAll(".blob")] : [];
+  applyDrift();
+  driftTimer = setInterval(applyDrift, DRIFT_STEP_MS);
+}
+
 onMounted(() => {
   // 提前与壁纸 API 域名建连，省去 DNS/TLS 时间
   try {
@@ -83,6 +146,9 @@ onMounted(() => {
     }
     const url = candidates[tried++];
     const img = new Image();
+    // 探针 URL 只生成一次：探测（img.src）与展示（bgSrcRef / wallpaperUrl / --bg-src）
+    // 用同一个 URL，展示 <img> 直接命中探针请求的浏览器缓存，壁纸整个会话只下载一次。
+    const probeUrl = url + (url.includes("?") ? "&" : "?") + "r=" + Math.random().toString(36).slice(2, 6);
     // 挂起兜底：源既不响应也不报错时 8s 判失败换下一个源（否则背景永远停在极光）
     let settled = false;
     const advance = () => {
@@ -97,30 +163,35 @@ onMounted(() => {
       settled = true;
       clearTimeout(hangTimer);
       custom.value = true;
-      bgSrcRef.value = url;
+      // 旧实现刻意让展示用"干净 URL"，结果探针那张图下载完即弃、展示图再下一张，
+      // 每次打开页面壁纸都要下载两遍（随机 API 每次还可能给不同的图）。
+      // 现在探针图即展示图：省一次下载，主页/面板/全屏三处仍是同一张图。
+      // （随机性不受影响：每次访问的 r= 参数不同，依旧每次换一张。）
+      bgSrcRef.value = probeUrl;
       // 全屏播放器无封面时的背景兜底读这里（E5 解耦），替代 MusicCard 里的 DOM querySelector
-      wallpaperUrl.value = new URL(url, location.href).href;
+      wallpaperUrl.value = new URL(probeUrl, location.href).href;
       // 把"实际展示的那张图"的地址挂到根变量，供二级面板复用。
-      // ⚠️必须用 url（模板 :src 绑定的那个）而不是 img.src：探针请求带 r= 随机参数，
-      // 与展示用的 URL 不同，用探针地址会让面板铺上另一张随机图，和主页背景对不上。
-      // 同一个 URL 才能命中缓存，不会二次下载。
       // 二级面板必须是不透明的：面板卡片要对背景做 backdrop-filter，若面板半透明，
       // 它下面就是主页卡片，两级卡片会在过渡期间互相透出并逐帧重算模糊（"交叉抖动"）。
       document.documentElement.style.setProperty(
         "--bg-src",
-        `url("${new URL(url, location.href).href}")`
+        `url("${new URL(probeUrl, location.href).href}")`
       );
       window.dispatchEvent(new Event("bg-ready"));
     };
     img.onerror = advance;
-    img.src = url + (url.includes("?") ? "&" : "?") + "r=" + Math.random().toString(36).slice(2, 6);
+    img.src = probeUrl;
   };
   loadBg();
   applyPalette();
   paletteTimer = setInterval(applyPalette, 60000);
+  startDrift();
 });
 
-onUnmounted(() => clearInterval(paletteTimer));
+onUnmounted(() => {
+  clearInterval(paletteTimer);
+  clearInterval(driftTimer);
+});
 </script>
 
 <style scoped>
@@ -156,6 +227,9 @@ onUnmounted(() => clearInterval(paletteTimer));
   position: absolute;
   opacity: 0.45;
   will-change: transform;
+  /* 漂移不再用 CSS 无限动画（合成器每 vsync 出帧 + backdrop-filter 逐帧重取景，
+     极光模式实测 80% GPU），由 script 的 startDrift 以 250ms 步进写 transform，
+     位移轨迹与缓动曲线逐点对齐原 keyframes（见 DRIFTS/easeInOut）。 */
 }
 
 .b1 {
@@ -172,7 +246,6 @@ onUnmounted(() => clearInterval(paletteTimer));
     color-mix(in srgb, var(--a1, #4f46e5) 18%, transparent) 78%,
     transparent 100%
   );
-  animation: drift1 46s ease-in-out infinite alternate;
 }
 
 .b2 {
@@ -190,7 +263,6 @@ onUnmounted(() => clearInterval(paletteTimer));
     transparent 100%
   );
   opacity: 0.38;
-  animation: drift2 52s ease-in-out infinite alternate;
 }
 
 .b3 {
@@ -208,7 +280,6 @@ onUnmounted(() => clearInterval(paletteTimer));
     transparent 100%
   );
   opacity: 0.4;
-  animation: drift3 58s ease-in-out infinite alternate;
 }
 
 .b4 {
@@ -226,31 +297,6 @@ onUnmounted(() => clearInterval(paletteTimer));
     transparent 100%
   );
   opacity: 0.3;
-  animation: drift4 40s ease-in-out infinite alternate;
-}
-
-@keyframes drift1 {
-  to {
-    transform: translate(9vw, 7vh) scale(1.15);
-  }
-}
-
-@keyframes drift2 {
-  to {
-    transform: translate(-7vw, 10vh) scale(0.9);
-  }
-}
-
-@keyframes drift3 {
-  to {
-    transform: translate(6vw, -9vh) scale(1.1);
-  }
-}
-
-@keyframes drift4 {
-  to {
-    transform: translate(-9vw, -6vh) scale(1.2);
-  }
 }
 
 .custom {
@@ -293,11 +339,5 @@ onUnmounted(() => clearInterval(paletteTimer));
   opacity: 0.04;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
   background-size: 180px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .blob {
-    animation: none;
-  }
 }
 </style>

@@ -1,12 +1,8 @@
 <template>
   <div class="glass epic">
-    <div class="head">
-      <span class="head-left">
-        <Icon name="gamepad" :size="15" />
-        <span>Epic 限免</span>
-      </span>
+    <CardHead icon="gamepad" title="Epic 限免" mb="12px">
       <span class="tip">点击领取</span>
-    </div>
+    </CardHead>
     <div v-if="games.length" class="games">
       <a
         v-for="g in games"
@@ -35,7 +31,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { cachedFetch } from "@/utils/cachedFetch";
-import Icon from "@/components/Icon.vue";
+import CardHead from "@/components/CardHead.vue";
 
 const games = ref([]);
 const failed = ref(false);
@@ -69,22 +65,6 @@ onMounted(async () => {
   padding: 20px 22px;
   display: flex;
   flex-direction: column;
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.head-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-dim);
 }
 
 .tip {

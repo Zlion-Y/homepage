@@ -1,10 +1,6 @@
 <template>
   <div class="glass blog">
-    <div class="head">
-      <span class="head-left">
-        <Icon name="rss" :size="15" />
-        <span>博客更新</span>
-      </span>
+    <CardHead icon="rss" title="博客更新" mb="10px">
       <span class="social">
         <a
           v-for="s in socialLinks"
@@ -18,7 +14,7 @@
           <Icon :name="s.icon" :size="16" />
         </a>
       </span>
-    </div>
+    </CardHead>
     <ul class="posts">
       <li v-for="p in posts" :key="p.link">
         <a :href="p.link" target="_blank" rel="noopener" :title="p.title">
@@ -40,6 +36,7 @@ import { ref, onMounted } from "vue";
 import { cachedFetch } from "@/utils/cachedFetch";
 import { socialLinks, siteLinks } from "@/config";
 import Icon from "@/components/Icon.vue";
+import CardHead from "@/components/CardHead.vue";
 
 // RSS 拉取失败时的兜底链接：复用 siteLinks 里配置的博客地址，
 // 换博客域名时只改 config.js 即可，不再硬编码
@@ -88,22 +85,6 @@ onMounted(async () => {
   flex-direction: column;
 }
 
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.head-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
 .social {
   display: flex;
   gap: 6px;
@@ -116,7 +97,7 @@ onMounted(async () => {
   height: 30px;
   border-radius: 9px;
   color: var(--text-dim);
-  transition: all 0.3s ease;
+  transition: color 0.3s ease, background 0.3s ease, transform 0.3s ease;
 }
 
 @media (hover: hover) {
@@ -144,7 +125,7 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: all 0.25s ease;
+  transition: color 0.25s ease, background 0.25s ease;
 }
 
 .posts a:hover {

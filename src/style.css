@@ -157,6 +157,85 @@ img {
   }
 }
 
+/* ── 毛玻璃快照（utils/frost.js，仅桌面精确指针 + 壁纸模式启用）──
+   壁纸就绪后给每张卡挂 .frost-ready：::after 铺「压暗+颗粒+壁纸」并自带
+   blur(14px) saturate(1.4)（静态元素的一次性滤镜，光栅化一次即缓存），卡片撤掉
+   实时 backdrop-filter——卡片背后的内容是静态的，实时取样的输出永远不变，却会因
+   任何脏区（光标/涟漪/倾斜）被逐帧重跑，实测光标划过卡片 GPU 50~78%，撤掉后回落
+   到整树合成底噪 ~14%。快照背景的 image/size/position 由 frost.js 按卡内联写入，
+   与实时取样同源同参数；6% 玻璃底色作为快照层首层（tint 在滤镜栈内数学等价：
+   saturate 线性且白色饱和中性）。 */
+/* 桌面端（frost 启用）所有卡片从首帧起保持 transform 图层提升：
+   载入动画期间本就会被动画提升，提升到 frost 挂载后无缝衔接，
+   避免动画结束→降级→frost 再提升造成的两段渲染切换 */
+body.frost-desktop .glass {
+  will-change: transform;
+}
+
+.glass.frost-ready {
+  /* 收住层叠：z-index:-1 的快照层要沉在玻璃底色之上、内容之下，
+     且快照层不透明铺满卡片，光泽层(::before)的混合基底与实时取样版一致 */
+  isolation: isolate;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* ⚠️白边修复：overflow:hidden 把 ::after 裁在 padding 盒，半透明边框圈后面
+     没有模糊取样（原版 backdrop-filter 的取样延伸到边框盒），透出未模糊的
+     原始壁纸形成细白边。改用 clip-path 裁到边框盒（快照得以铺到边框下），
+     overflow 放开；负 z 子级画在元素边框之上会盖掉边框，用 -1px 内缩 outline
+     在原位置重画（outline 画在层叠顶层、不受自身 clip-path 裁剪影响）。 */
+  overflow: visible;
+  clip-path: inset(0 round var(--radius));
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+  /* 倾斜结束后的图层降级会重光栅化一次，静止瞬间可见一帧细微变化；
+     保持提升避免降级（静态层无重绘成本，只有常驻显存） */
+  will-change: transform;
+}
+
+/* 键盘焦点环：默认 frost 描边让位（offset -3px 使焦点环保持在 clip 盒内可见） */
+.glass.frost-ready:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: -3px;
+}
+
+.glass.frost-ready::after {
+  content: "";
+  position: absolute;
+  /* 超出卡片 60px 供模糊取边缘（frost.js 同步这个值） */
+  inset: -60px;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(14px) saturate(1.4);
+  /* 背景层由 frost.js 经 --frost-image/--frost-size/--frost-position/--frost-repeat
+     按卡内联注入（伪元素无法直接写内联样式，变量可继承进伪元素） */
+  background-image: var(--frost-image);
+  background-size: var(--frost-size);
+  background-position: var(--frost-position);
+  background-repeat: var(--frost-repeat);
+}
+
+.more .glass.frost-ready {
+  /* 面板卡的提层提示随实时滤镜一并撤掉，改保持 transform 提升与主页卡一致 */
+  will-change: transform;
+}
+
+/* 6% 玻璃底色在快照层内（frost.js 层序第一位）。@property 注册成可过渡的 <color>，
+   站点卡悬停时底色 6%→10% 与实时版的 background-color 过渡观感一致；
+   写法带 fallback，不支持 @property 的旧浏览器退化为固定色（仅失去过渡） */
+@property --frost-tint {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: rgba(255, 255, 255, 0.06);
+}
+
+.site-card.frost-ready {
+  transition: --frost-tint 0.3s ease;
+}
+
+.site-card.frost-ready:hover {
+  --frost-tint: rgba(255, 255, 255, 0.1);
+}
+
 /* 载入层淡出过渡 */
 .fade-enter-active,
 .fade-leave-active {
@@ -271,7 +350,7 @@ body.custom-cursor * {
   }
 }
 
-/* 打字机光标：实现在 GreetCard 的 scoped 样式里（含 keyframes），此处不再重复 */
+/* 打字机光标：实现在 GreetCard 的 scoped 样式里（JS 定步进闪烁），此处不再重复 */
 
 /* ── 点击进入二级面板的烟花 + 小提示（见 utils/fx.js） ── */
 .fx-canvas {

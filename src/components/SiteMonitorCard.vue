@@ -1,12 +1,8 @@
 <template>
   <div class="glass monitor" ref="rootEl">
-    <div class="head">
-      <span class="head-left">
-        <Icon name="wifi" :size="15" />
-        <span>站点监控</span>
-      </span>
+    <CardHead icon="wifi" title="站点监控" mb="12px">
       <span class="tip">每分钟自动检测</span>
-    </div>
+    </CardHead>
 
     <div v-if="sites.length" class="list">
       <a
@@ -40,7 +36,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { siteConfig } from "@/config";
-import Icon from "@/components/Icon.vue";
+import CardHead from "@/components/CardHead.vue";
 
 // 站点监控：浏览器 no-cors 直连探测（请求真实发往站点，连通即返回不透明响应，
 // DNS/断网/超时则失败）——与访客视角的「能否打开」一致，无需任何监控服务
@@ -151,22 +147,6 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.head-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
 .tip {
   font-size: 0.7rem;
   color: var(--text-dim);
@@ -221,13 +201,9 @@ onUnmounted(() => {
 
 .dot.checking {
   background: #facc15;
-  animation: blink 1s ease-in-out infinite;
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0.35;
-  }
+  /* 原来带 blink 闪烁动画（ease-in-out 连续插值），已按用户要求移除——
+     常驻无限动画每 vsync 出帧是首页 GPU 占用主源之一（见 ClockCard 冒号同款注释）。
+     检查中改为黄灯常亮，与 up/down 一样只有一次性状态切换。 */
 }
 
 .meta {

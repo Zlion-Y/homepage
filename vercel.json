@@ -41,7 +41,7 @@
   "rewrites": [
     {
       "source": "/blog-rss",
-      "destination": "https://blog.example.com/rss.xml"
+      "destination": "https://blog.zlion.top/rss.xml"
     },
     {
       "source": "/netease-search",

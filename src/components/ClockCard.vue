@@ -140,7 +140,9 @@ onUnmounted(() => clearInterval(timer));
   margin: 0 0.1em;
   /* middle 锚点是 x-height 中线，数字字形中心略高，补偿 (cap-x)/2 ≈ 0.09em */
   transform: translateY(-0.09em);
-  animation: colon-breathe 2s ease-in-out infinite;
+  /* 原来带 colon-breathe 呼吸动画（ease-in-out 连续插值），已按用户要求移除：
+     常驻无限动画让合成器每 vsync 出帧，配合全页 13 张 backdrop-filter 毛玻璃卡
+     每帧全屏重合成，是 2.5K@120Hz 下空闲 GPU 47% 的主源。冒号静止常亮。 */
 }
 
 .colon i {
@@ -148,15 +150,5 @@ onUnmounted(() => clearInterval(timer));
   height: 0.11em;
   border-radius: 50%;
   background: currentColor;
-}
-
-@keyframes colon-breathe {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.25;
-  }
 }
 </style>

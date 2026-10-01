@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootEl" class="more">
+  <div class="more">
     <div class="inner">
       <header class="top">
         <button class="back" @click="$emit('close')">
@@ -22,38 +22,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, nextTick, ref } from "vue";
+import { computed, onMounted, nextTick } from "vue";
 import { applyTilt } from "@/utils/tilt";
 import { siteConfig } from "@/config";
 import Icon from "@/components/Icon.vue";
-import NewsCard from "@/components/NewsCard.vue";
-import HotListCard from "@/components/HotListCard.vue";
-import MusicCard from "@/components/MusicCard.vue";
-import EpicCard from "@/components/EpicCard.vue";
-import HistoryCard from "@/components/HistoryCard.vue";
-import GithubCard from "@/components/GithubCard.vue";
-import SiteMonitorCard from "@/components/SiteMonitorCard.vue";
+import { PANEL_CARD_MAP, PANEL_CARD_NEEDS } from "@/components/panel/registry";
 
 // 卡片清单由配置驱动（siteConfig.panelCards：顺序 = 排列，删项 = 隐藏）
-const cardMap = {
-  news: NewsCard,
-  hotlist: HotListCard,
-  music: MusicCard,
-  epic: EpicCard,
-  history: HistoryCard,
-  monitor: SiteMonitorCard,
-  github: GithubCard,
-};
-// 依赖配置的卡：对应配置为空时自动隐藏
-const needs = {
-  github: () => !!siteConfig.githubUser,
-  music: () => !!siteConfig.musicPlaylist,
-  monitor: () => !!(siteConfig.siteMonitors || []).length,
-};
 const cards = computed(() =>
-  (siteConfig.panelCards || Object.keys(cardMap))
-    .map((key) => ({ key, comp: cardMap[key] }))
-    .filter((c) => c.comp && (!needs[c.key] || needs[c.key]()))
+  (siteConfig.panelCards || Object.keys(PANEL_CARD_MAP))
+    .map((key) => ({ key, comp: PANEL_CARD_MAP[key] }))
+    .filter((c) => c.comp && (!PANEL_CARD_NEEDS[c.key] || PANEL_CARD_NEEDS[c.key]()))
 );
 // 每行列数：桌面端网格列数与行数计算共用这一个常量（经 --cols 注入 CSS），
 // 改列数只动这里，gridRows 不会再跟 CSS 里的硬编码静默错位
@@ -65,25 +44,14 @@ const gridRows = computed(
 );
 
 const emit = defineEmits(["close"]);
-const rootEl = ref(null);
 
-function onKey(e) {
-  // 面板隐藏（display:none，即一级界面）时不响应 Esc——否则首页按 Esc 也会空跑
-  // 一遍关闭状态机，给 closePanel 的后续副作用埋雷。全屏播放器的优先级守卫见下。
-  if (rootEl.value && rootEl.value.style.display === "none") return;
-  // 全屏播放器开着时把 Esc 让给它（先关全屏，再按一次才关面板）。
-  // 主防线在 MusicCard.onFsEsc 的 stopImmediatePropagation（body.fs-open 类会在
-  // 同一次按键内被 before-leave 摘掉，这里查类只是双保险，拦"离开动画期间的二次 Esc"）。
-  if (document.body.classList.contains("fs-open")) return;
-  if (e.key === "Escape") emit("close");
-}
-
+// Esc 关面板由 App 的面板状态机经统一 Esc 栈（utils/escStack）处理：
+// 全屏播放器开着时它在栈顶先被弹出，天然实现"先关全屏，再按一次才关面板"，
+// 不再需要这里查 display:none / body.fs-open 的两道守卫补丁。
 onMounted(() => {
-  window.addEventListener("keydown", onKey);
   // 面板卡片动态挂载，立即绑定 hover 倾联动效
   nextTick(() => applyTilt(0));
 });
-onUnmounted(() => window.removeEventListener("keydown", onKey));
 </script>
 
 <style scoped>

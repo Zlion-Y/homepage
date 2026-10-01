@@ -1,12 +1,8 @@
 <template>
   <div class="glass news">
-    <div class="head">
-      <span class="head-left">
-        <Icon name="sun" :size="15" />
-        <span>每日新闻</span>
-      </span>
+    <CardHead icon="sun" title="每日新闻" mb="12px">
       <span class="date">{{ date }}</span>
-    </div>
+    </CardHead>
     <ol v-if="news.length" class="list">
       <li v-for="(n, i) in news" :key="i">{{ n }}</li>
     </ol>
@@ -18,7 +14,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { cachedFetch } from "@/utils/cachedFetch";
-import Icon from "@/components/Icon.vue";
+import CardHead from "@/components/CardHead.vue";
 
 const news = ref([]);
 const date = ref("");
@@ -58,22 +54,6 @@ onMounted(async () => {
   flex-direction: column;
 }
 
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.head-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
 .date {
   font-size: 0.74rem;
   color: var(--text-dim);
@@ -98,7 +78,7 @@ onMounted(async () => {
   font-size: 0.88rem;
   line-height: 1.6;
   color: var(--text-dim);
-  transition: all 0.25s ease;
+  transition: color 0.25s ease, background 0.25s ease;
 }
 
 .list li::before {

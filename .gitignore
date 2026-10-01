@@ -5,3 +5,7 @@ dist
 .vercel
 .DS_Store
 *.local
+dist-baseline
+
+.workbuddy/
+.zcodeignore

@@ -1,11 +1,11 @@
 # 洛雪音源解析（`musicSource: "proxy"`）参考
 
-[`README`](../README.md) 里「音乐播放器」一节的详细补充。仅在你要启用自带解析时才有用。
+[`README`](../README.md) 里「音乐播放器」一节的详细补充。本站**已启用**这套解析。
 
 > **⚠️ 只适配 Vercel。** 这套解析跑在 Node 运行时上（`node:vm` 执行音源脚本、请求期可用 `new Function`、
 > 直读 `sources/` 目录），换成 Cloudflare Pages / EdgeOne 的边缘函数会失效 —— 实测原因见文末
 > 「为什么边缘平台跑不了」。用 EdgeOne **Cloud Functions**（Node.js 20 区域函数，非边缘节点）这类
-> 也能跑，但本仓库只对 Vercel 做过验证。
+> 也能跑，但只对 Vercel 做过验证。
 
 ---
 
@@ -19,9 +19,9 @@
 - 直链缓存在 CDN 边缘（`s-maxage=900`），**命中缓存的请求根本不进函数**，不消耗调用次数；
 - 解析不到时自动降级回 Meting，所以**开着也不影响原来能用的情况**。
 
-⚠️ 启用前需要**自备音源脚本**：放 [`sources/`](../sources/README.md)（仓库只带示例脚本，真实音源请自行准备，
-参考 [lxmusic-](https://github.com/guoyue2010/lxmusic-)），或配 `SOURCE_URLS` 环境变量指向在线脚本 ——
-改了远端脚本不用重新部署，调一次 `/api/health?refresh=1` 即可让函数重装全部音源。
+音源脚本放在 [`sources/`](../sources/README.md) 随函数一起部署（本仓库已放好；模板仓库只带示例脚本），
+或配 `SOURCE_URLS` 环境变量指向在线脚本 —— 改了远端脚本不用重新部署，调一次 `/api/health?refresh=1`
+即可让函数重装全部音源。
 
 > 这类"直链代理"本身在灰区，建议只自用、别公开分发。函数默认跑在香港（`hkg1`，离国内接口最近）。
 
@@ -55,8 +55,8 @@ await (await fetch('/api/url?id=287398&source=wy&quality=320k')).json()
 命令行则必须**自己带上本站的 Referer/Origin**（见「访问控制」）：
 
 ```bash
-curl -s -H "Referer: https://你的域名" "https://你的域名/api/health" | head -c 800
-curl -s -H "Referer: https://你的域名" "https://你的域名/api/url?id=287398&source=wy&quality=320k"
+curl -s -H "Referer: https://www.zlion.top" "https://www.zlion.top/api/health" | head -c 800
+curl -s -H "Referer: https://www.zlion.top" "https://www.zlion.top/api/url?id=287398&source=wy&quality=320k"
 ```
 
 ### `/api/url` 入参
@@ -111,7 +111,7 @@ curl -s -H "Referer: https://你的域名" "https://你的域名/api/url?id=2873
 | 从站内点链接 / `location.href` 跳过去 | **200** |
 | 浏览器地址栏直接输入 `/api/health`（不发 Referer） | **403** `来源不在白名单` |
 | `curl` 裸调（无 Origin/Referer） | **403** |
-| `curl -H "Referer: https://你的域名" …` 或带本站 Origin | **200** |
+| `curl -H "Referer: https://www.zlion.top" …` 或带本站 Origin | **200** |
 | 带其它站点的 Origin/Referer | **403** |
 | 别的网站里 `fetch` 本站接口 | 被 CORS 挡掉（`Access-Control-Allow-Origin` 只回本站） |
 
@@ -120,7 +120,7 @@ curl -s -H "Referer: https://你的域名" "https://你的域名/api/url?id=2873
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" …                                  # 无 Referer：要 token
-curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …  # 同源：token 可省
+curl -H "Referer: https://www.zlion.top" -H "Authorization: Bearer $TOKEN" …  # 同源：token 可省
 ```
 
 想放行无 Origin/Referer 的请求（比如纯 curl 自检）才需要 `ALLOW_NO_ORIGIN=1`，但那就等于对外公开了，谨慎。
@@ -215,7 +215,7 @@ curl -H "Referer: https://你的域名" -H "Authorization: Bearer $TOKEN" …  #
 
 把音源脚本改写成"构建期预编译成普通函数 + 请求期执行 + 按平台只激活相关脚本"确实能在边缘跑通（本地已验证），
 但代价是**每次改音源都要重新构建**、边缘上**无法再用 `SOURCE_URLS` 远端音源**，免费版的 CPU 余量也始终紧张。
-所以本仓库默认只支持 Vercel 这种 Node 运行时；真要在别处跑，用 EdgeOne Cloud Functions 这类 Node 区域函数最省事。
+所以这套解析只支持 Vercel 这种 Node 运行时；真要在别处跑，用 EdgeOne Cloud Functions 这类 Node 区域函数最省事。
 
 部署后按上面的方式调 `/api/health` 能看到装上了哪些音源、各自的平台与失败原因。
 音源：[https://github.com/guoyue2010/lxmusic-](https://github.com/guoyue2010/lxmusic-)

@@ -1,12 +1,8 @@
 <template>
   <div class="glass history">
-    <div class="head">
-      <span class="head-left">
-        <Icon name="clock" :size="15" />
-        <span>程序员历史上的今天</span>
-      </span>
+    <CardHead icon="clock" title="程序员历史上的今天" mb="10px">
       <span class="date">{{ date }}</span>
-    </div>
+    </CardHead>
     <ol v-if="events.length" class="list">
       <li v-for="(e, i) in events" :key="i">
         <span class="year">{{ e.year }}</span>
@@ -22,7 +18,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { cachedFetch } from "@/utils/cachedFetch";
-import Icon from "@/components/Icon.vue";
+import CardHead from "@/components/CardHead.vue";
 
 const events = ref([]);
 const date = ref("");
@@ -61,22 +57,6 @@ onMounted(async () => {
   padding: 20px 22px;
   display: flex;
   flex-direction: column;
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.head-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-dim);
 }
 
 .date {
